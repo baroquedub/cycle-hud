@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "name": "Cycle Hub",
+  "description": "Heading-up street map, speed, time and a mini music player for cycling.",
+  "appearance": {
+    "theme_color": "#0B6455",
+    "icon": {
+      "src": "../icons/icon.svg",
+      "type": "monochrome"
+    }
+  }
+}

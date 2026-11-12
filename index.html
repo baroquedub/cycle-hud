@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="Cycling heads-up hub for Meta Display Glasses: a heading-up street map of where you are with no destination needed, your speed, the time, and a mini player for Spotify or Plexamp.">
+  <meta name="mrbd-web-app-capable" content="yes">
+  <meta name="application-name" content="Cycle Hub">
+  <meta name="theme-color" content="#000000">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <title>Cycle Hub</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ============ MAP (home) ============ -->
+    <section id="screen-map" class="screen map-screen" data-screen="map">
+      <button id="map-focus" class="map-focus" aria-label="Map. Up and down zoom, left and right skip tracks, select for the menu."></button>
+      <canvas id="map" width="600" height="600" aria-hidden="true"></canvas>
+
+      <div class="pill speed" id="speed-pill" aria-live="off">
+        <span class="speed-val" id="speed-val">--</span>
+        <span class="speed-unit" id="speed-unit">mph</span>
+      </div>
+      <div class="pill clock" id="clock">--:--</div>
+      <div class="pill notice gps" id="gps-pill" hidden>Waiting for GPS</div>
+      <div class="pill notice mapmsg" id="map-pill" hidden>Loading map…</div>
+
+      <div class="media-bar" id="media-bar" hidden aria-live="polite">
+        <div class="media-glyph" id="media-glyph">S</div>
+        <div class="media-text">
+          <div class="mq-box"><span class="mq-text" id="media-title">—</span></div>
+          <div class="media-artist" id="media-artist"></div>
+        </div>
+        <div class="media-ctl" aria-hidden="true"><span>‹</span><span id="media-play">▶</span><span>›</span></div>
+      </div>
+    </section>
+
+    <!-- ============ MENU ============ -->
+    <section id="screen-menu" class="screen" data-screen="menu" hidden>
+      <div class="rows">
+        <button class="row" data-action="playpause" id="row-playpause">▶  Play</button>
+        <button class="row" data-action="units" id="row-units">Units: mph</button>
+        <button class="row" data-action="mapmode" id="row-mapmode">Map: Facing up</button>
+        <button class="row" data-action="media" id="row-media">Media: Off</button>
+        <button class="row" data-action="pair">Pair phone</button>
+        <button class="row" data-action="status">Status</button>
+      </div>
+    </section>
+
+    <!-- ============ PAIR PHONE ============ -->
+    <section id="screen-pair" class="screen" data-screen="pair" hidden>
+      <div class="topbar">
+        <button class="back" data-action="back" aria-label="Back">‹</button>
+        <h1 class="title">Pair phone</h1>
+      </div>
+      <div class="pair-body">
+        <p class="hint">On your phone, open</p>
+        <p id="pair-url" class="pair-url"></p>
+        <p class="hint">and enter this code:</p>
+        <p id="pair-code" class="pair-code"></p>
+        <p id="pair-status" class="pair-status"><span class="dot"></span><span id="pair-status-text">Connecting…</span></p>
+      </div>
+      <div class="actions">
+        <button class="btn" data-action="newcode">New code</button>
+      </div>
+    </section>
+
+    <!-- ============ STATUS ============ -->
+    <section id="screen-status" class="screen" data-screen="status" hidden>
+      <div class="topbar">
+        <button class="back" data-action="back" aria-label="Back">‹</button>
+        <h1 class="title">Status</h1>
+      </div>
+      <div class="scroll" tabindex="0" aria-label="Status details">
+        <dl id="status-list" class="kv"></dl>
+      </div>
+      <div class="actions">
+        <button class="btn" data-action="locretry" id="btn-locretry">Retry location</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="geo.js"></script>
+  <script src="mvt.js"></script>
+  <script src="map.js"></script>
+  <script src="relay.js"></script>
+  <script src="media-spotify.js"></script>
+  <script src="media-plex.js"></script>
+  <script src="media.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

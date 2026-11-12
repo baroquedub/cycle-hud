@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1216">
+  <meta name="referrer" content="no-referrer">
+  <title>Cycle Hub – Pair phone</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    :root { --bg: #0f1216; --card: #171c22; --card-2: #1f262e; --text: #f2f5f7; --dim: #8d98a3; --accent: #4fe3c1; --ok: #4cd97b; --warn: #ffb547; --danger: #ff6b6b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.4; padding: 16px; padding-bottom: 48px; }
+    h1 { font-size: 24px; margin: 8px 0 16px; }
+    h2 { font-size: 18px; margin: 0 0 8px; }
+    .card { background: var(--card); border-radius: 16px; padding: 16px; margin-bottom: 16px; }
+    .hint { color: var(--dim); font-size: 14px; margin: 6px 0; }
+    label { display: block; font-size: 14px; color: var(--dim); margin: 10px 0 4px; }
+    input { width: 100%; font: inherit; font-size: 17px; color: var(--text); background: var(--card-2); border: 1px solid #2a333a; border-radius: 10px; padding: 12px; }
+    input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    #code-input { text-transform: uppercase; letter-spacing: 0.12em; font-weight: 700; text-align: center; }
+    .btn { display: inline-block; font: inherit; font-size: 16px; font-weight: 600; color: #00110c; background: var(--accent); border: 0; border-radius: 999px; padding: 12px 20px; margin: 10px 8px 0 0; cursor: pointer; }
+    .btn.secondary { background: var(--card-2); color: var(--text); }
+    .btn:disabled { opacity: 0.5; cursor: default; }
+    .status { font-size: 14px; margin-top: 10px; min-height: 1.2em; }
+    .status.ok { color: var(--ok); } .status.bad { color: var(--danger); } .status.warn { color: var(--warn); }
+    .pair-code { font-size: 22px; font-weight: 700; letter-spacing: 0.1em; }
+    code { font-size: 13px; word-break: break-all; color: var(--text); background: var(--card-2); padding: 2px 6px; border-radius: 6px; }
+    details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); font-size: 14px; }
+    ol { padding-left: 20px; font-size: 14px; color: var(--dim); } li { margin: 6px 0; }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--card-2); color: var(--text); padding: 10px 18px; border-radius: 999px; font-size: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+    .toast[hidden] { display: none; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Cycle Hub · Pair phone</h1>
+
+  <!-- ============ PAIRING ============ -->
+  <section class="card">
+    <h2>1. Pair with the glasses</h2>
+    <div id="pair-set" hidden>
+      <p>Paired with code <span class="pair-code" id="pair-code"></span></p>
+      <button class="btn secondary" id="pair-change">Change code</button>
+      <button class="btn secondary" id="pair-ping">Test</button>
+    </div>
+    <div id="pair-new">
+      <p class="hint">On the glasses open Cycle Hub, press Enter for the menu, choose <b>Pair phone</b>, and type the code shown:</p>
+      <input id="code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD-EFGH">
+      <button class="btn" id="pair-save" disabled>Save</button>
+    </div>
+    <p class="status" id="pair-status"></p>
+  </section>
+
+  <!-- ============ SPOTIFY ============ -->
+  <section class="card">
+    <h2>2. Spotify</h2>
+    <p class="hint">Needs Spotify Premium and a free Spotify developer app (one-time, see below). Your sign-in token goes straight from this phone to the glasses; it is never stored here or on the relay.</p>
+    <label for="sp-client">Spotify app Client ID</label>
+    <input id="sp-client" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="32-character client id">
+    <button class="btn" id="sp-connect">Connect Spotify</button>
+    <p class="status" id="sp-status"></p>
+    <details>
+      <summary>How to create the Spotify developer app</summary>
+      <ol>
+        <li>Go to <b>developer.spotify.com/dashboard</b>, sign in with your Spotify account, and press <b>Create app</b>.</li>
+        <li>Name: anything (e.g. Cycle Hub). Redirect URI: <code id="sp-redirect"></code> (press <b>Add</b>). API: tick <b>Web API</b>. Save.</li>
+        <li>Open the app's <b>Settings</b> and copy the <b>Client ID</b> into the box above.</li>
+        <li>Have Cycle Hub open on the glasses, then press <b>Connect Spotify</b>. After you approve, this page sends the token to the glasses and they show "Spotify connected".</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- ============ PLEX ============ -->
+  <section class="card">
+    <h2>3. Plex / Plexamp</h2>
+    <p class="hint">Your Plex Media Server must be reachable from the internet (Settings → Remote Access). Use its secure <b>plex.direct</b> address so the glasses can talk to it over HTTPS.</p>
+    <label for="px-url">Server address</label>
+    <input id="px-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://1-2-3-4.xxxxxxxx.plex.direct:32400">
+    <label for="px-token">Plex token</label>
+    <input id="px-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="X-Plex-Token">
+    <button class="btn secondary" id="px-test">Test</button>
+    <button class="btn" id="px-send">Send to glasses</button>
+    <p class="status" id="px-status"></p>
+    <details>
+      <summary>Finding the address and token</summary>
+      <ol>
+        <li>Open <b>plex.tv/api/resources?includeHttps=1&amp;X-Plex-Token=YOUR-TOKEN</b> in a browser. Under your server, copy a <code>uri</code> that ends in <b>.plex.direct:32400</b> and is not a local address.</li>
+        <li>Token: in Plex Web, open any track → ⋯ → <b>Get Info</b> → <b>View XML</b>. The page address ends with <code>X-Plex-Token=…</code>; copy that value.</li>
+        <li>Press <b>Test</b> while Plexamp is playing. It should show the current track. Then <b>Send to glasses</b>.</li>
+      </ol>
+    </details>
+  </section>
+
+  <p class="hint">Anyone who knows your pairing code could send settings to your glasses. Use <b>New code</b> on the glasses any time to change it.</p>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="config.js"></script>
+  <script>
+  (() => {
+    'use strict';
+    const CFG = window.CH.CONFIG;
+    const RELAY = String(CFG.RELAY_URL || 'https://ntfy.sh').replace(/\/+$/, '');
+    const $ = (id) => document.getElementById(id);
+    const store = {
+      get(k, d) { try { const v = localStorage.getItem('chp.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+      set(k, v) { try { if (v == null) localStorage.removeItem('chp.' + k); else localStorage.setItem('chp.' + k, JSON.stringify(v)); } catch {} },
+    };
+    let toastT;
+    function toast(msg, ms = 2800) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, ms); }
+    function setStatus(id, msg, cls = '') { const el = $(id); el.textContent = msg; el.className = 'status ' + cls; }
+
+    // ---------- pairing
+    const cleanCode = (s) => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+    let code = store.get('code', '');
+    function renderPair() {
+      $('pair-set').hidden = !code;
+      $('pair-new').hidden = !!code;
+      if (code) $('pair-code').textContent = code.slice(0, 4) + '-' + code.slice(4);
+    }
+    $('code-input').addEventListener('input', (e) => {
+      const c = cleanCode(e.target.value).slice(0, 8);
+      e.target.value = c.length > 4 ? c.slice(0, 4) + '-' + c.slice(4) : c;
+      $('pair-save').disabled = c.length !== 8;
+    });
+    $('pair-save').addEventListener('click', async () => {
+      code = cleanCode($('code-input').value).slice(0, 8);
+      if (code.length !== 8) return;
+      store.set('code', code);
+      renderPair();
+      const ok = await send({ ping: true }, true);
+      setStatus('pair-status', ok ? 'Paired. The glasses should say "Phone paired".' : 'Saved, but the relay did not answer.', ok ? 'ok' : 'warn');
+    });
+    $('pair-change').addEventListener('click', () => { code = ''; store.set('code', null); $('code-input').value = ''; $('pair-save').disabled = true; renderPair(); $('code-input').focus(); });
+    $('pair-ping').addEventListener('click', async () => { const ok = await send({ ping: true }, true); setStatus('pair-status', ok ? 'Sent. The glasses should say "Phone paired".' : 'The relay did not answer.', ok ? 'ok' : 'bad'); });
+
+    // Everything is sent with cache=no: delivered only to glasses listening right now, never stored on the relay.
+    async function send(payload, silent = false) {
+      if (!code) { toast('Pair with your glasses first'); $('code-input').focus(); return false; }
+      try {
+        const body = Object.assign({ v: 1 }, payload);
+        const res = await fetch(`${RELAY}/${CFG.RELAY_PREFIX}${code.toLowerCase()}?cache=no`, { method: 'POST', body: JSON.stringify(body) });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        if (!silent) { toast('Sent to glasses ✓'); if (navigator.vibrate) navigator.vibrate(30); }
+        return true;
+      } catch (e) { toast('Couldn’t send: ' + e.message, 4000); return false; }
+    }
+
+    // ---------- Spotify (Authorization Code with PKCE, entirely in this page)
+    const REDIRECT = location.origin + location.pathname;
+    $('sp-redirect').textContent = REDIRECT;
+    $('sp-client').value = store.get('spClient', '');
+    $('sp-client').addEventListener('change', () => store.set('spClient', $('sp-client').value.trim()));
+
+    const b64url = (buf) => btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    async function pkce() {
+      const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)));
+      const challenge = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+      return { verifier, challenge };
+    }
+
+    $('sp-connect').addEventListener('click', async () => {
+      const clientId = $('sp-client').value.trim();
+      if (!/^[0-9a-f]{32}$/i.test(clientId)) { setStatus('sp-status', 'Enter the 32-character Client ID first.', 'bad'); return; }
+      if (!code) { setStatus('sp-status', 'Pair with the glasses first (section 1).', 'bad'); return; }
+      if (!window.crypto || !crypto.subtle) { setStatus('sp-status', 'This page must be opened over HTTPS.', 'bad'); return; }
+      store.set('spClient', clientId);
+      const { verifier, challenge } = await pkce();
+      const state = b64url(crypto.getRandomValues(new Uint8Array(12)));
+      sessionStorage.setItem('chp.verifier', verifier);
+      sessionStorage.setItem('chp.state', state);
+      const q = new URLSearchParams({
+        client_id: clientId, response_type: 'code', redirect_uri: REDIRECT,
+        scope: CFG.SPOTIFY_SCOPES, code_challenge_method: 'S256', code_challenge: challenge, state,
+      });
+      location.href = 'https://accounts.spotify.com/authorize?' + q.toString();
+    });
+
+    async function finishSpotify(authCode, state) {
+      const verifier = sessionStorage.getItem('chp.verifier');
+      const expect = sessionStorage.getItem('chp.state');
+      sessionStorage.removeItem('chp.verifier'); sessionStorage.removeItem('chp.state');
+      history.replaceState(null, '', REDIRECT);
+      if (!verifier || state !== expect) { setStatus('sp-status', 'Sign-in did not match this page. Press Connect Spotify again.', 'bad'); return; }
+      const clientId = store.get('spClient', '');
+      setStatus('sp-status', 'Finishing sign-in…');
+      try {
+        const res = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ grant_type: 'authorization_code', code: authCode, redirect_uri: REDIRECT, client_id: clientId, code_verifier: verifier }).toString(),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.refresh_token) throw new Error(j.error_description || j.error || ('HTTP ' + res.status));
+        const payload = { spotify: { clientId, refreshToken: j.refresh_token, accessToken: j.access_token || '', expiresAt: Date.now() + (j.expires_in || 3600) * 1000 } };
+        const ok = await send(payload, true);
+        setStatus('sp-status', ok ? 'Sent to the glasses. They should say "Spotify connected".' : 'Signed in, but the glasses relay did not answer. Open Cycle Hub on the glasses and press Connect Spotify again.', ok ? 'ok' : 'warn');
+      } catch (e) { setStatus('sp-status', 'Spotify sign-in failed: ' + e.message, 'bad'); }
+    }
+
+    // ---------- Plex
+    $('px-url').value = store.get('pxUrl', '');
+    $('px-token').value = store.get('pxToken', '');
+    const plexCreds = () => {
+      const url = $('px-url').value.trim().replace(/\/+$/, ''), token = $('px-token').value.trim();
+      store.set('pxUrl', url); store.set('pxToken', token);
+      return { url, token };
+    };
+    async function plexSessions(c) {
+      const u = new URL(c.url + '/status/sessions'); u.searchParams.set('X-Plex-Token', c.token);
+      const res = await fetch(u.toString(), { headers: { Accept: 'application/json' } });
+      if (res.status === 401) throw new Error('token rejected (401)');
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      return ((j.MediaContainer && j.MediaContainer.Metadata) || []).filter((m) => m.type === 'track');
+    }
+    $('px-test').addEventListener('click', async () => {
+      const c = plexCreds();
+      if (!/^https:\/\//.test(c.url) || !c.token) { setStatus('px-status', 'Enter an https:// server address and a token.', 'bad'); return; }
+      setStatus('px-status', 'Testing…');
+      try {
+        const tracks = await plexSessions(c);
+        if (!tracks.length) { setStatus('px-status', 'Server reached, but nothing is playing. Start Plexamp and test again.', 'warn'); return; }
+        const t = tracks.find((m) => m.Player && /plexamp/i.test(m.Player.product || '')) || tracks[0];
+        setStatus('px-status', `Now playing: ${t.title} — ${t.grandparentTitle || ''} on ${(t.Player && (t.Player.title || t.Player.product)) || 'a player'} (${t.Player && t.Player.state}).`, 'ok');
+      } catch (e) {
+        setStatus('px-status', 'Could not reach the server from this page: ' + e.message + '. If it works in another app, the server may not allow browser (CORS) access.', 'bad');
+      }
+    });
+    $('px-send').addEventListener('click', async () => {
+      const c = plexCreds();
+      if (!/^https:\/\//.test(c.url) || !c.token) { setStatus('px-status', 'Enter an https:// server address and a token.', 'bad'); return; }
+      const ok = await send({ plex: { url: c.url, token: c.token } }, true);
+      setStatus('px-status', ok ? 'Sent to the glasses. They should say "Plex connected".' : 'The glasses relay did not answer.', ok ? 'ok' : 'warn');
+    });
+
+    // ---------- boot
+    renderPair();
+    const q = new URLSearchParams(location.search);
+    if (q.get('code')) finishSpotify(q.get('code'), q.get('state'));
+    else if (q.get('error')) { history.replaceState(null, '', REDIRECT); setStatus('sp-status', 'Spotify sign-in was cancelled (' + q.get('error') + ').', 'bad'); }
+  })();
+  </script>
+</body>
+</html>
