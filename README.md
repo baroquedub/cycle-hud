@@ -20,7 +20,7 @@ Built for the glasses' 600×600 additive display (black is see-through), Neural 
 1. Create a new **public** repository (e.g. `cycle-hub`).
 2. Push this folder to it (or upload everything, including the hidden `.well-known` folder and `.nojekyll` file).
 3. **Settings → Pages → Source: Deploy from a branch → main / (root) → Save.**
-4. After a minute the app is live at `https://<you>.github.io/cycle-hub/`.
+4. After a minute the app is live at `https://baroquedub.github.io/cycle-hub/`.
 5. Add it on the glasses the same way as other web apps (Meta AI app → Developer Mode → add the link or scan a QR code).
 
 `.nojekyll` matters: without it GitHub Pages hides the `.well-known` folder, and the glasses won't find the app's name and icon.
@@ -30,7 +30,7 @@ Built for the glasses' 600×600 additive display (black is see-through), Neural 
 Typing on a phone is far easier than on the glasses, and sign-in tokens must never be committed to a public repo. So the phone page `pair.html` does the sign-in and sends the result straight to the glasses through a private [ntfy.sh](https://ntfy.sh) topic named after a pairing code (nothing is stored on the relay).
 
 1. On the glasses: menu → **Pair phone**. You'll see the page address and an 8-character code.
-2. On your phone, open `https://<you>.github.io/cycle-hub/pair.html` and enter the code. The glasses say "Phone paired".
+2. On your phone, open `https://baroquedub.github.io/cycle-hub/pair.html` and enter the code. The glasses say "Phone paired".
 
 Anyone who knows the code could send settings to your glasses; press **New code** on the glasses to change it any time.
 
@@ -39,7 +39,7 @@ Anyone who knows the code could send settings to your glasses; press **New code*
 Spotify's API requires an app registration (free, 5 minutes). Do this once:
 
 1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), sign in, **Create app**.
-2. Redirect URI: `https://<you>.github.io/cycle-hub/pair.html` (press Add). Tick **Web API**. Save.
+2. Redirect URI: `https://baroquedub.github.io/cycle-hub/pair.html` (press Add). Tick **Web API**. Save.
 3. Copy the app's **Client ID** into the Spotify box on `pair.html`, make sure Cycle Hub is open on the glasses, and press **Connect Spotify**.
 
 After you approve, the glasses say "Spotify connected" and the media bar shows what's playing. Controls (Left / Right / Pause) act on whatever device Spotify is playing on. The token refreshes itself on the glasses; if the glasses' storage is wiped by a software update, just press Connect Spotify again.
