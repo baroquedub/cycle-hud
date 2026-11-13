@@ -132,6 +132,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform 475ms cubic-bezier(0.6, 0, 0.4, 1), opacity 300ms cubic-bezier(0.4, 0.04, 0.5, 1);
 }
 .row[hidden] { display: none; }
+/* menu transport row: ‹ | Play/Pause | › */
+.transport { display: flex; gap: 8px; width: 100%; }
+.transport[hidden] { display: none; }
+.transport .row { width: auto; text-align: center; }
+.transport .tbtn { flex: 0 0 104px; padding: 0; font-size: 40px; line-height: 1; }
+.transport .tmain { flex: 1 1 auto; }
 .row:focus-visible { opacity: 1; background: var(--surface-2); transform: scale(0.97); outline: 3px solid var(--accent); outline-offset: -3px; }
 
 /* ---------- top bar, buttons ---------- */

@@ -222,10 +222,13 @@
       const stopped = now < Sim.pauseUntil;
       if (!stopped) Sim.along += Sim.speed;
       const p = Sim.pointAt(Sim.along), ahead = Sim.pointAt(Sim.along + 5);
+      // &noheading drops the heading and speed fields, like fixes relayed from
+      // the phone can, so the derived course / speed paths can be tested.
+      const bare = params.has('noheading');
       const fix = {
         lat: p[0], lon: p[1], accuracy: 8,
-        heading: stopped ? null : bearing(p, ahead),
-        speed: stopped ? 0 : Sim.speed * (0.95 + Math.random() * 0.1),
+        heading: stopped || bare ? null : bearing(p, ahead),
+        speed: bare ? null : stopped ? 0 : Sim.speed * (0.95 + Math.random() * 0.1),
         t: now,
       };
       Loc.last = fix; Loc.lastFixAt = now; Loc.fixes++;
@@ -289,7 +292,9 @@
     slowCount: 0,
     prev: null,            // previous fix used for derived speed
     course: null,          // target course (deg) or null before the first one
-    courseSrc: 'none',     // 'gps' | 'held' | 'compass' | 'none'
+    courseSrc: 'none',     // 'gps' | 'derived' | 'held' | 'compass' | 'none'
+    anchor: null,          // fix the derived course is measured from
+    derived: null,         // { v: bearing, t } from our own movement
     state: 'NONE',         // NONE | MOVING | HELD
     displayed: null,       // smoothed heading used for the rotation
     lastStep: 0,
@@ -311,13 +316,30 @@
         Motion.speedAt = f.t;
       }
       // --- course
-      const hasHeading = finite(f.heading) && f.heading >= 0 && f.accuracy < 50;
+      // GPS course when the fix carries one; otherwise the bearing of our own
+      // movement since an anchor fix (the glasses' phone-relayed fixes can
+      // arrive without a heading field). The anchor advances once we've moved
+      // further than the position noise.
+      let heading = null, src = 'gps';
+      if (finite(f.heading) && f.heading >= 0 && f.accuracy < 50) { heading = f.heading; Motion.anchor = f; }
+      else {
+        const a = Motion.anchor;
+        if (!a || !finite(f.accuracy) || !finite(a.accuracy)) Motion.anchor = f;
+        else {
+          const moved = haversine([a.lat, a.lon], [f.lat, f.lon]);
+          const need = Math.max(8, Math.min(40, 0.6 * Math.max(f.accuracy, a.accuracy)));
+          if (moved >= need && f.accuracy < 100) { Motion.derived = { v: bearing([a.lat, a.lon], [f.lat, f.lon]), t: f.t }; Motion.anchor = f; }
+          else if (f.t - a.t > 20000) Motion.anchor = f;
+        }
+        if (Motion.derived && f.t - Motion.derived.t < 10000) { heading = Motion.derived.v; src = 'derived'; }
+      }
+      const hasHeading = heading != null;
       if (Motion.state === 'MOVING') {
         if (Motion.speed < 1.0 || !hasHeading) { Motion.state = 'HELD'; Motion.courseSrc = Motion.course == null ? 'none' : 'held'; }
       } else if (Motion.speed >= 1.5 && hasHeading) {
         Motion.state = 'MOVING';
       }
-      if (Motion.state === 'MOVING') { Motion.course = f.heading; Motion.courseSrc = 'gps'; }
+      if (Motion.state === 'MOVING') { Motion.course = heading; Motion.courseSrc = src; }
     },
 
     // Course used to centre the next map box ahead of you (null when unknown).

@@ -108,7 +108,14 @@
   }
   function focusScreen(name) {
     if (name === 'map') holdFocus('map', () => $('map-focus'));
-    else holdFocus(name, () => document.querySelector(`[data-screen="${name}"] button:not([hidden]):not([disabled]), [data-screen="${name}"] [tabindex="0"]`));
+    else holdFocus(name, () => {
+      // a [data-default] control (the menu's Play/Pause) wins, else the first visible control
+      const scope = document.querySelector(`[data-screen="${name}"]`);
+      if (!scope) return null;
+      const pref = scope.querySelector('[data-default]');
+      if (pref && !pref.disabled && !pref.closest('[hidden]')) return pref;
+      return FocusNav.items(scope)[0] || null;
+    });
   }
 
   // ------------------------------------------------------------------ focus movement (menu / pair / status)
@@ -181,9 +188,11 @@
     if (!el) return;
     const a = el.dataset.action;
     if (a === 'back') goBack();
-    else if (a === 'playpause') { mediaAct('toggle'); }
+    else if (a === 'playpause') { mediaAct('toggle'); renderMenu(); }
+    else if (a === 'prev') mediaAct('prev');
+    else if (a === 'next') mediaAct('next');
     else if (a === 'units') { settings.units = settings.units === 'mph' ? 'kmh' : 'mph'; store.set('units', settings.units); applyUnits(); renderMenu(); }
-    else if (a === 'mapmode') { cycleMapMode(); renderMenu(); }
+    else if (a === 'mapmode') { cycleMapMode().then(renderMenu); }   // async: a compass permission prompt may be involved
     else if (a === 'media') { cycleMedia(); renderMenu(); }
     else if (a === 'pair') show('pair');
     else if (a === 'status') show('status');
@@ -204,13 +213,15 @@
   function renderMenu() {
     const hasMedia = settings.media !== 'off';
     const pp = $('row-playpause');
-    pp.hidden = !hasMedia;
+    $('row-transport').hidden = !hasMedia;
     pp.textContent = Media.last.playing ? '❚❚  Pause' : '▶  Play';
     $('row-units').textContent = 'Units: ' + unitLabel();
-    $('row-mapmode').textContent = 'Map: ' + ({ auto: 'Facing up', north: 'North up', compass: 'Compass' })[settings.mapMode];
+    $('row-mapmode').textContent = 'Map: ' + mapModeLabel();
     $('row-media').textContent = 'Media: ' + ({ spotify: 'Spotify', plex: 'Plex', off: 'Off' })[settings.media];
   }
   Media.onState = () => { if (current === 'menu') renderMenu(); };
+
+  const mapModeLabel = () => ({ auto: 'Facing up', north: 'North up', compass: 'Compass' })[settings.mapMode];
 
   function applyUnits() {
     MapView.units = settings.units;
@@ -229,6 +240,7 @@
     settings.mapMode = next;
     store.set('mapMode', next);
     Motion.mode = next;
+    toast('Map: ' + mapModeLabel(), 1500);
     MapView.requestDraw();
   }
 
@@ -358,6 +370,7 @@
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
+      ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
       ['Draw', MapView.frames + ' frames · last ' + MapView.lastFrameMs.toFixed(1) + ' ms · zoom ' + MapView.metresPerPx() + ' m/px'],

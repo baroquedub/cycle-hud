@@ -42,7 +42,11 @@
     <!-- ============ MENU ============ -->
     <section id="screen-menu" class="screen" data-screen="menu" hidden>
       <div class="rows">
-        <button class="row" data-action="playpause" id="row-playpause">▶  Play</button>
+        <div class="transport" id="row-transport">
+          <button class="row tbtn" data-action="prev" aria-label="Previous track">‹</button>
+          <button class="row tmain" data-action="playpause" id="row-playpause" data-default>▶  Play</button>
+          <button class="row tbtn" data-action="next" aria-label="Next track">›</button>
+        </div>
         <button class="row" data-action="units" id="row-units">Units: mph</button>
         <button class="row" data-action="mapmode" id="row-mapmode">Map: Facing up</button>
         <button class="row" data-action="media" id="row-media">Media: Off</button>

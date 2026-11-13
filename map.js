@@ -330,7 +330,6 @@
   // compressed horizon doesn't become a bright band. RIDER_FROM_BOTTOM is how
   // much of the map is behind you.
   const TILT = { TOP_SCALE: 0.38, FADE_PX: 150, RIDER_FROM_BOTTOM: 80 };
-  const CONE = { HALF_DEG: 28, LEN_PX: 130, RGB: '70,150,255' };
   const SCALE_METRIC = [[50, '50 m'], [100, '100 m'], [200, '200 m'], [500, '500 m'], [1000, '1 km'], [2000, '2 km'], [5000, '5 km']];
   const SCALE_IMPERIAL = [[91.44, '100 yd'], [182.9, '200 yd'], [402.3, '¼ mi'], [804.7, '½ mi'], [1609.3, '1 mi'], [3218.7, '2 mi'], [8046.7, '5 mi']];
 
@@ -467,24 +466,6 @@
         // on-screen direction of travel: straight up when the map is rotated to
         // the heading, otherwise (north up) the course itself
         const dir = hdg == null && course != null ? G.rad(course) : 0;
-        if (dirKnown) {
-          // translucent blue cone showing where you're facing, projected through
-          // the same tilt as the roads so it lies on the map
-          const half = G.rad(CONE.HALF_DEG), L = CONE.LEN_PX;
-          ctx.beginPath(); ctx.moveTo(cx, cy);
-          for (let s = -half; s <= half + 1e-6; s += half / 6) {
-            const ex = L * Math.sin(dir + s), fw = L * Math.cos(dir + s);
-            const kk = HD / (HD + fw);
-            ctx.lineTo(cx + ex * kk, cy - fw * kk);
-          }
-          ctx.closePath();
-          const rr = L * HD / (HD + L * Math.cos(dir));
-          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(20, rr));
-          g.addColorStop(0, 'rgba(' + CONE.RGB + ',0.75)');
-          g.addColorStop(0.45, 'rgba(' + CONE.RGB + ',0.4)');
-          g.addColorStop(1, 'rgba(' + CONE.RGB + ',0)');
-          ctx.fillStyle = g; ctx.fill();
-        }
         ctx.save();
         ctx.translate(cx, cy);
         if (dirKnown) {
