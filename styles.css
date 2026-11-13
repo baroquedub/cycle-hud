@@ -126,10 +126,18 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .media-artist { font-size: 16px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-ctl { flex: 0 0 auto; display: flex; gap: 14px; font-size: 22px; color: var(--text-2); }
 
+/* dash view (Enter on the main screen): no map, speed | media | clock on one row */
+.map-screen.dash #map { display: none; }
+.map-screen.dash .media-bar { top: 24px; left: 172px; right: 152px; height: 64px; padding: 0 14px; gap: 10px; }
+.map-screen.dash .media-glyph { flex-basis: 36px; height: 36px; font-size: 15px; }
+.map-screen.dash .mq-text { font-size: 18px; }
+.map-screen.dash .media-artist { font-size: 14px; }
+.map-screen.dash .media-ctl { font-size: 18px; gap: 10px; }
+
 /* ---------- menu ---------- */
 .rows { display: flex; flex-direction: column; gap: 8px; width: 100%; }
 .row {
-  height: 88px;
+  height: 72px;
   width: 100%;
   background: var(--surface);
   border-radius: var(--radius);

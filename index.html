@@ -18,7 +18,7 @@
 
     <!-- ============ MAP (home) ============ -->
     <section id="screen-map" class="screen map-screen" data-screen="map">
-      <button id="map-focus" class="map-focus" aria-label="Map. Up and down zoom, left and right skip tracks, select for the menu."></button>
+      <button id="map-focus" class="map-focus" aria-label="Map. Select switches between the map and the dashboard, down opens the menu, left and right skip tracks."></button>
       <canvas id="map" width="600" height="400" aria-hidden="true"></canvas>
 
       <div class="pill speed" id="speed-pill" aria-live="off">
@@ -50,6 +50,7 @@
         </div>
         <button class="row" data-action="units" id="row-units">Units: mph</button>
         <button class="row" data-action="mapmode" id="row-mapmode">Map: Facing up</button>
+        <button class="row" data-action="zoom" id="row-zoom">Zoom: Normal</button>
         <button class="row" data-action="media" id="row-media">Media: Off</button>
         <button class="row" data-action="pair">Pair phone</button>
         <button class="row" data-action="status">Status</button>

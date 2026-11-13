@@ -385,8 +385,8 @@
     init(canvas) { MapView.canvas = canvas; },
     setFix(fix) { MapView.fix = fix; MapView.requestDraw(); },
 
-    zoomBy(delta) {
-      const z = Math.max(0, Math.min(CFG.ZOOMS.length - 1, MapView.zoom + delta));
+    setZoom(i) {
+      const z = Math.max(0, Math.min(CFG.ZOOMS.length - 1, i | 0));
       if (z === MapView.zoom) return false;
       MapView.zoom = z;
       MapData.rezoom();
@@ -425,7 +425,9 @@
 
       const fix = MapView.fix;
       const settled = CH.Motion.step(now);
-      const hdg = CH.Motion.displayed;
+      const north = CH.Motion.mode === 'north';
+      const heading = CH.Motion.displayed;           // fused, smoothed; null until known
+      const hdg = north ? null : heading;             // map rotation
       const th = hdg == null ? 0 : G.rad(hdg);
       const cos = Math.cos(th), sin = Math.sin(th);
       const scale = MapView.metresPerPx();
@@ -497,11 +499,10 @@
           ctx.beginPath(); ctx.arc(cx, cy, acc / scale, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
         }
-        const course = CH.Motion.course;
-        const dirKnown = hdg != null || course != null;
+        const dirKnown = heading != null;
         // on-screen direction of travel: straight up when the map is rotated to
-        // the heading, otherwise (north up) the course itself
-        const dir = hdg == null && course != null ? G.rad(course) : 0;
+        // the heading, otherwise (north up) the heading itself
+        const dir = north && dirKnown ? G.rad(heading) : 0;
         ctx.save();
         ctx.translate(cx, cy);
         if (dirKnown) {

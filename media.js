@@ -94,6 +94,9 @@
       bar.classList.toggle('dim', L.state !== 'ok');
     },
 
+    // The bar changes width between the map and dash views.
+    remeasure() { const t = $('media-title'); Media.marquee(t, t.textContent); },
+
     // Animate only when the text overflows its box; otherwise sit still.
     marquee(el, text) {
       el.classList.remove('marquee');

@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.4.0',
+  VERSION: '0.5.0',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -27,8 +27,10 @@ window.CH.CONFIG = {
   ],
   OVERPASS_TIMEOUT_MS: 20000,
 
-  // Metres per CSS pixel for each zoom step (600 px = 1.2 / 2.4 / 4.8 km across).
-  ZOOMS: [2, 4, 8],
+  // Metres per CSS pixel for each zoom step (600 px = 1.2 / 2.4 km across),
+  // chosen from the menu's Zoom row.
+  ZOOMS: [2, 4],
+  ZOOM_LABELS: ['Close', 'Normal'],
   DEFAULT_ZOOM: 1,
   WIDE_ZOOM_INDEX: 2,       // from this zoom step, keep 5x5 tiles loaded instead of 3x3
 
@@ -37,6 +39,16 @@ window.CH.CONFIG = {
   // SNAP_MAX_DEG of the way you're moving; crossing streets are ignored.
   SNAP_RADIUS_M: 30,
   SNAP_MAX_DEG: 60,
+
+  // Heading fusion: the glasses' compass gives the instant heading, the
+  // road-snapped course corrects its bias. A compass reading more than
+  // HEAD_GLANCE_DEG off the course is treated as a look over the shoulder and
+  // ignored for HEAD_GLANCE_MS; longer than that it's a real turn.
+  HEAD_GLANCE_DEG: 60,
+  HEAD_GLANCE_MS: 2000,
+  HEAD_FAST_DPS: 90,         // compass turning faster than this is a head movement, not the bike
+  COMPASS_STEADY_DPS: 15,    // the bias is only learned while the compass turns slower than this
+  COMPASS_BIAS_GAIN: 0.03,   // per draw step (~10 Hz)
 
   DEFAULT_UNITS: 'mph',     // 'mph' or 'kmh'
 

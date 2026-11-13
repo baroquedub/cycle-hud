@@ -3,7 +3,7 @@
  * focus movement, key routing, menu, clock, pills, pairing, status, wake lock.
  *
  * Input: the Neural Band / temple swipes send ArrowUp/Down/Left/Right + Enter.
- * Map screen:  Up/Down zoom · Left/Right previous/next track · Enter menu.
+ * Main screen: Enter map/dash view · Down menu · Left/Right previous/next track.
  * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7 &box=800).
  */
 (() => {
@@ -23,13 +23,15 @@
 
   const settings = {
     units: store.get('units', CFG.DEFAULT_UNITS),         // 'mph' | 'kmh'
-    mapMode: store.get('mapMode', 'auto'),                 // 'auto' | 'north' | 'compass'
+    mapMode: store.get('mapMode', 'auto'),                 // 'auto' (facing up) | 'north'
+    view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock)
     media: store.get('media', 'off'),                      // 'spotify' | 'plex' | 'off'
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
     debug: store.get('debug', true),                       // on-map readout, toggled on the Status screen
   };
   if (!['mph', 'kmh'].includes(settings.units)) settings.units = CFG.DEFAULT_UNITS;
-  if (!['auto', 'north', 'compass'].includes(settings.mapMode)) settings.mapMode = 'auto';
+  if (!['auto', 'north'].includes(settings.mapMode)) settings.mapMode = 'auto';
+  if (!['map', 'dash'].includes(settings.view)) settings.view = 'map';
   if (!['spotify', 'plex', 'off'].includes(settings.media)) settings.media = 'off';
   if (!(settings.zoom >= 0 && settings.zoom < CFG.ZOOMS.length)) settings.zoom = CFG.DEFAULT_ZOOM;
   CH.settings = settings;
@@ -65,9 +67,8 @@
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.dataset.screen !== name; });
     const was = current;
     current = name;
-    MapView.enabled = name === 'map';
-    if (name === 'map') { MapView.requestDraw(); }
-    else MapView.stop();
+    if (name === 'map') applyView();
+    else { MapView.enabled = false; MapView.stop(); }
     if (name === 'menu') renderMenu();
     if (name === 'pair') renderPair();
     if (name === 'pair' || was === 'pair') Relay.setFastPoll(name === 'pair');
@@ -166,11 +167,11 @@
   document.addEventListener('keydown', (e) => {
     const k = e.key;
     if (current === 'map') {
-      if (k === 'ArrowUp') { if (MapView.zoomBy(-1)) onZoom(); e.preventDefault(); }
-      else if (k === 'ArrowDown') { if (MapView.zoomBy(1)) onZoom(); e.preventDefault(); }
+      if (k === 'ArrowDown') { openMenu(); e.preventDefault(); }
+      else if (k === 'ArrowUp') { e.preventDefault(); }
       else if (k === 'ArrowLeft') { mediaAct('prev'); e.preventDefault(); }
       else if (k === 'ArrowRight') { mediaAct('next'); e.preventDefault(); }
-      else if (k === 'Enter') { openMenu(); e.preventDefault(); }
+      else if (k === 'Enter') { toggleView(); e.preventDefault(); }
       return;
     }
     const dir = { ArrowDown: 'down', ArrowUp: 'up', ArrowLeft: 'left', ArrowRight: 'right' }[k];
@@ -184,7 +185,7 @@
   }, true);
 
   document.addEventListener('click', (e) => {
-    if (e.target.id === 'map-focus') { openMenu(); return; }
+    if (e.target.id === 'map-focus') { toggleView(); return; }
     const el = e.target.closest('[data-action]');
     if (!el) return;
     const a = el.dataset.action;
@@ -193,7 +194,8 @@
     else if (a === 'prev') mediaAct('prev');
     else if (a === 'next') mediaAct('next');
     else if (a === 'units') { settings.units = settings.units === 'mph' ? 'kmh' : 'mph'; store.set('units', settings.units); applyUnits(); renderMenu(); }
-    else if (a === 'mapmode') { cycleMapMode().then(renderMenu); }   // async: a compass permission prompt may be involved
+    else if (a === 'mapmode') { cycleMapMode(); renderMenu(); }
+    else if (a === 'zoom') { cycleZoom(); renderMenu(); }
     else if (a === 'media') { cycleMedia(); renderMenu(); }
     else if (a === 'pair') show('pair');
     else if (a === 'status') show('status');
@@ -202,7 +204,25 @@
     else if (a === 'debug') { settings.debug = !settings.debug; store.set('debug', settings.debug); renderStatus(); updateDebug(); }
   });
 
-  function onZoom() { store.set('zoom', MapView.zoom); toast(MapView.acrossText(), 1500); }
+  function cycleZoom() {
+    MapView.setZoom((MapView.zoom + 1) % CFG.ZOOMS.length);
+    store.set('zoom', MapView.zoom);
+    toast('Zoom: ' + CFG.ZOOM_LABELS[MapView.zoom] + ' · ' + MapView.acrossText(), 1500);
+  }
+
+  // ------------------------------------------------------------------ main-screen view (map / dash)
+  function applyView() {
+    $('screen-map').classList.toggle('dash', settings.view === 'dash');
+    MapView.enabled = current === 'map' && settings.view === 'map';
+    if (MapView.enabled) MapView.requestDraw(); else MapView.stop();
+    Media.remeasure();
+    updateDebug();
+  }
+  function toggleView() {
+    settings.view = settings.view === 'map' ? 'dash' : 'map';
+    store.set('view', settings.view);
+    applyView();
+  }
 
   function mediaAct(name) {
     if (settings.media === 'off') { if (name !== 'toggle') toast('Media is off — Menu → Media', 2000); return; }
@@ -219,11 +239,12 @@
     pp.textContent = Media.last.playing ? '❚❚  Pause' : '▶  Play';
     $('row-units').textContent = 'Units: ' + unitLabel();
     $('row-mapmode').textContent = 'Map: ' + mapModeLabel();
+    $('row-zoom').textContent = 'Zoom: ' + CFG.ZOOM_LABELS[MapView.zoom];
     $('row-media').textContent = 'Media: ' + ({ spotify: 'Spotify', plex: 'Plex', off: 'Off' })[settings.media];
   }
   Media.onState = () => { if (current === 'menu') renderMenu(); };
 
-  const mapModeLabel = () => ({ auto: 'Facing up', north: 'North up', compass: 'Compass' })[settings.mapMode];
+  const mapModeLabel = () => ({ auto: 'Facing up', north: 'North up' })[settings.mapMode];
 
   function applyUnits() {
     MapView.units = settings.units;
@@ -232,13 +253,8 @@
     MapView.requestDraw();
   }
 
-  async function cycleMapMode() {
-    const order = ['auto', 'north', 'compass'];
-    let next = order[(order.indexOf(settings.mapMode) + 1) % order.length];
-    if (next === 'compass') {
-      const ok = await Compass.request();
-      if (!ok) { toast('Compass not available here'); next = 'auto'; }
-    } else Compass.detach();
+  function cycleMapMode() {
+    const next = settings.mapMode === 'auto' ? 'north' : 'auto';
     settings.mapMode = next;
     store.set('mapMode', next);
     Motion.mode = next;
@@ -293,13 +309,14 @@
   // Two short lines about what the heading is based on, readable while riding.
   function updateDebug() {
     const el = $('debug-pill');
-    el.hidden = !settings.debug;
-    if (!settings.debug) return;
+    el.hidden = !settings.debug || settings.view === 'dash';
+    if (el.hidden) return;
     const f = Loc.last;
     const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
-    const l1 = mapModeLabel() + ' · ' + Motion.courseSrc + ' ' + dg(Motion.course) + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
-    const l2 = f ? 'fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–') + ' · cmp ' + dg(Compass.fresh())
-      : 'no fix yet';
+    const b = Math.round(Motion.bias);
+    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + ' b' + (b >= 0 ? '+' : '') + b + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
+    const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
+      : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
   }
 
@@ -318,7 +335,7 @@
     if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); }
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
-  Compass.onChange = () => { if (settings.mapMode === 'compass') MapView.requestDraw(); };
+  Compass.onChange = () => { if (MapView.enabled) MapView.requestDraw(); };
   Loc.onStatus = () => { updateGpsPill(); if (current === 'status') renderStatus(); };
 
   // ------------------------------------------------------------------ pairing
@@ -384,6 +401,7 @@
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
+      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · bias ' + Math.round(Motion.bias) + '°'],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
@@ -422,7 +440,10 @@
     MapView.zoom = settings.zoom;
     Motion.mode = settings.mapMode;
     Motion.roadLookup = MapData.nearestRoad;
-    if (settings.mapMode === 'compass') Compass.attach();
+    // The compass is always part of the heading. Try straight away (attaches
+    // directly where no permission API exists); where a prompt needs a user
+    // gesture the first attempt fails, so ask again on the first key press.
+    Compass.request().then((ok) => { if (!ok) document.addEventListener('keydown', () => { Compass.request(); }, { once: true }); });
     applyUnits();
     history.replaceState({ s: 'map', d: 0 }, '', location.pathname + location.search + '#map');
     render('map');

@@ -242,6 +242,7 @@
   // ------------------------------------------------------------------ compass (opt-in map mode)
   const Compass = {
     value: null, at: 0, attached: false,
+    raw: null, rawAt: 0, rate: 0,     // deg/s the raw reading is turning, smoothed
     async request() {
       try {
         const O = window.DeviceOrientationEvent, M = window.DeviceMotionEvent;
@@ -272,8 +273,14 @@
       if (finite(e.webkitCompassHeading)) h = e.webkitCompassHeading;
       else if ((e.absolute === true || e.type === 'deviceorientationabsolute') && finite(e.alpha)) h = (360 - e.alpha) % 360;
       if (h == null) return;
+      const now = Date.now();
+      if (Compass.raw != null && now - Compass.rawAt > 20 && now - Compass.rawAt < 1000) {
+        const r = angleDiff(Compass.raw, h) / ((now - Compass.rawAt) / 1000);
+        Compass.rate += 0.3 * (r - Compass.rate);
+      } else if (now - Compass.rawAt >= 1000) Compass.rate = 0;
+      Compass.raw = h; Compass.rawAt = now;
       Compass.value = Compass.value == null ? h : angleLerp(Compass.value, h, 0.25);
-      Compass.at = Date.now();
+      Compass.at = now;
       if (Compass.onChange) Compass.onChange();
     },
     fresh() { return Compass.value != null && Date.now() - Compass.at < 2500 ? Compass.value : null; },
@@ -283,10 +290,11 @@
 
   // ------------------------------------------------------------------ motion fusion
   // Speed: GPS speed when the phone gives one, else distance/time between
-  // fixes, smoothed. Course: GPS course while moving, held while stopped
-  // (so the map doesn't swing when you look around), compass only if chosen.
+  // fixes, smoothed. Course: from the fixes (GPS heading, or our own movement),
+  // snapped to the road, held while stopped. Heading: the course fused with
+  // the glasses' compass for a real-time swing (see fuse()).
   const Motion = {
-    mode: 'auto',          // 'auto' (facing up), 'north', 'compass'
+    mode: 'auto',          // 'auto' (facing up: map rotates) | 'north' (arrow rotates)
     speed: 0,              // m/s, smoothed
     speedAt: 0,
     slowCount: 0,
@@ -298,6 +306,10 @@
     roadLookup: null,      // (lat, lon, radius, heading) => { bearing, dist } — set by app.js
     road: null,            // last road snap result
     state: 'NONE',         // NONE | MOVING | HELD
+    heading: null,         // fused real-time heading (deg) or null
+    bias: 0,               // learned compass offset (deg): compass + bias ~ course
+    hint: null,            // bias-corrected compass, used to pick the road direction
+    divergedSince: 0,
     displayed: null,       // smoothed heading used for the rotation
     lastStep: 0,
 
@@ -347,7 +359,7 @@
         // map swings as soon as a fix lands on the new road after a turn.
         if (Motion.roadLookup) {
           const radius = Math.max(CFG.SNAP_RADIUS_M, Math.min(60, (finite(f.accuracy) ? f.accuracy : 0) * 1.5));
-          const r = Motion.roadLookup(f.lat, f.lon, radius, heading);
+          const r = Motion.roadLookup(f.lat, f.lon, radius, Motion.hint != null ? Motion.hint : heading);
           Motion.road = r;
           if (r) { Motion.course = r.bearing; Motion.courseSrc = 'road'; }
         }
@@ -357,25 +369,38 @@
     // Course used to centre the next map box ahead of you (null when unknown).
     lookahead() { return Motion.course; },
 
-    // Heading the map should rotate to right now; null = north up.
-    target() {
-      if (Motion.mode === 'north') return null;
-      if (Motion.mode === 'compass') {
-        const c = Compass.fresh();
-        if (c != null) { Motion.courseSrc = 'compass'; return c; }
+    // Real-time heading: the compass (instant, but it follows the head and
+    // carries a bias) corrected by the road-snapped course (slow, true).
+    fuse(now) {
+      const ref = Motion.course, c = Compass.fresh();
+      if (c == null) { Motion.hint = null; return ref; }
+      const cand = (c + Motion.bias + 360) % 360;
+      Motion.hint = cand;
+      if (ref == null) return cand;                       // not moved yet: the head is all we have
+      if (Motion.state !== 'MOVING') return ref;          // stopped: hold, don't swing with the head
+      const fast = Math.abs(Compass.rate) > CFG.HEAD_FAST_DPS;   // the head whipping round, not the bike
+      const d = angleDiff(cand, ref);
+      if (Math.abs(d) <= CFG.HEAD_GLANCE_DEG) {
+        Motion.divergedSince = 0;
+        if (fast) return ref;
+        if (Math.abs(Compass.rate) < CFG.COMPASS_STEADY_DPS) Motion.bias = angleDiff(0, Motion.bias + CFG.COMPASS_BIAS_GAIN * d);
+        return (c + Motion.bias + 360) % 360;
       }
-      return Motion.course;
+      if (fast) { Motion.divergedSince = now; return ref; }   // restart the glance window while it's still moving
+      if (!Motion.divergedSince) Motion.divergedSince = now;
+      return now - Motion.divergedSince < CFG.HEAD_GLANCE_MS ? ref : cand;   // glance: hold; turn: follow
     },
 
-    // Advance the smoothed heading. Returns true when settled.
+    // Advance the smoothed heading (map rotation in Facing up, arrow in North
+    // up). Returns true when settled.
     step(now) {
-      const t = Motion.target();
+      const t = Motion.heading = Motion.fuse(now);
       if (t == null) { Motion.displayed = null; Motion.lastStep = now; return true; }
       if (Motion.displayed == null) { Motion.displayed = t; Motion.lastStep = now; return true; }
       const dt = Math.min(0.5, Math.max(0, (now - Motion.lastStep) / 1000));
       Motion.lastStep = now;
       const d = Math.abs(angleDiff(Motion.displayed, t));
-      const tau = d > 30 ? 0.3 : 0.6;
+      const tau = d > 30 ? 0.15 : 0.3;     // short: the compass is already smoothed and the swing should feel live
       Motion.displayed = angleLerp(Motion.displayed, t, 1 - Math.exp(-dt / tau));
       return Math.abs(angleDiff(Motion.displayed, t)) < 0.5;
     },
