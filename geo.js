@@ -292,9 +292,11 @@
     slowCount: 0,
     prev: null,            // previous fix used for derived speed
     course: null,          // target course (deg) or null before the first one
-    courseSrc: 'none',     // 'gps' | 'derived' | 'held' | 'compass' | 'none'
+    courseSrc: 'none',     // 'road' | 'gps' | 'derived' | 'held' | 'compass' | 'none'
     anchor: null,          // fix the derived course is measured from
     derived: null,         // { v: bearing, t } from our own movement
+    roadLookup: null,      // (lat, lon, radius, heading) => { bearing, dist } — set by app.js
+    road: null,            // last road snap result
     state: 'NONE',         // NONE | MOVING | HELD
     displayed: null,       // smoothed heading used for the rotation
     lastStep: 0,
@@ -339,7 +341,17 @@
       } else if (Motion.speed >= 1.5 && hasHeading) {
         Motion.state = 'MOVING';
       }
-      if (Motion.state === 'MOVING') { Motion.course = heading; Motion.courseSrc = src; }
+      if (Motion.state === 'MOVING') {
+        Motion.course = heading; Motion.courseSrc = src;
+        // Snap to the road you're on: the arrow lines up with the street and the
+        // map swings as soon as a fix lands on the new road after a turn.
+        if (Motion.roadLookup) {
+          const radius = Math.max(CFG.SNAP_RADIUS_M, Math.min(60, (finite(f.accuracy) ? f.accuracy : 0) * 1.5));
+          const r = Motion.roadLookup(f.lat, f.lon, radius, heading);
+          Motion.road = r;
+          if (r) { Motion.course = r.bearing; Motion.courseSrc = 'road'; }
+        }
+      } else Motion.road = null;
     },
 
     // Course used to centre the next map box ahead of you (null when unknown).

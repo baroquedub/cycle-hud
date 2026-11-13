@@ -254,6 +254,42 @@
       else MapData.status = loading ? 'loading' : 'error';
     },
 
+    // Nearest road to a point, for snapping the course to the street you're
+    // on. `heading` (deg) orients the segment the way you're going and rejects
+    // roads crossing your path. Returns { bearing, dist, cls } or null.
+    nearestRoad(lat, lon, radius, heading) {
+      if (!MapData.origin || !MapData.tiles.size) return null;
+      const [px, py] = G.project([lat, lon], MapData.origin);
+      let best = null, bestD = radius;
+      for (const tile of MapData.tiles.values()) {
+        for (let cls = 0; cls < 3; cls++) {            // major, minor, cycle/path (not service)
+          const ways = tile.classes[cls];
+          for (let k = 0; k < ways.length; k++) {
+            const w = ways[k], bb = w.bb;
+            if (px < bb[0] - bestD || px > bb[2] + bestD || py < bb[1] - bestD || py > bb[3] + bestD) continue;
+            const xy = w.xy;
+            for (let i = 2; i < xy.length; i += 2) {
+              const ax = xy[i - 2], ay = xy[i - 1], vx = xy[i] - ax, vy = xy[i + 1] - ay;
+              const L2 = vx * vx + vy * vy;
+              if (L2 < 1) continue;
+              let t = ((px - ax) * vx + (py - ay) * vy) / L2;
+              t = t < 0 ? 0 : t > 1 ? 1 : t;
+              const dx = ax + vx * t - px, dy = ay + vy * t - py;
+              const d = Math.sqrt(dx * dx + dy * dy);
+              if (d >= bestD) continue;
+              let b = (G.deg(Math.atan2(vx, vy)) + 360) % 360;
+              if (heading != null) {
+                if (Math.abs(G.angleDiff(heading, b)) > 90) b = (b + 180) % 360;
+                if (Math.abs(G.angleDiff(heading, b)) > CFG.SNAP_MAX_DEG) continue;
+              }
+              bestD = d; best = { bearing: b, dist: d, cls };
+            }
+          }
+        }
+      }
+      return best;
+    },
+
     loadedCount() { return MapData.tiles.size; },
     wayCount() { let n = 0; for (const t of MapData.tiles.values()) n += t.count; return n; },
 

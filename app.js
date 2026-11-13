@@ -26,6 +26,7 @@
     mapMode: store.get('mapMode', 'auto'),                 // 'auto' | 'north' | 'compass'
     media: store.get('media', 'off'),                      // 'spotify' | 'plex' | 'off'
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
+    debug: store.get('debug', true),                       // on-map readout, toggled on the Status screen
   };
   if (!['mph', 'kmh'].includes(settings.units)) settings.units = CFG.DEFAULT_UNITS;
   if (!['auto', 'north', 'compass'].includes(settings.mapMode)) settings.mapMode = 'auto';
@@ -198,6 +199,7 @@
     else if (a === 'status') show('status');
     else if (a === 'newcode') { Relay.start(true); renderPair(); toast('New code — enter it on your phone'); }
     else if (a === 'locretry') { Loc.restart(); toast('Looking for your location…'); renderStatus(); }
+    else if (a === 'debug') { settings.debug = !settings.debug; store.set('debug', settings.debug); renderStatus(); updateDebug(); }
   });
 
   function onZoom() { store.set('zoom', MapView.zoom); toast(MapView.acrossText(), 1500); }
@@ -288,10 +290,23 @@
     if (msg) el.textContent = msg;
   }
 
+  // Two short lines about what the heading is based on, readable while riding.
+  function updateDebug() {
+    const el = $('debug-pill');
+    el.hidden = !settings.debug;
+    if (!settings.debug) return;
+    const f = Loc.last;
+    const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
+    const l1 = mapModeLabel() + ' · ' + Motion.courseSrc + ' ' + dg(Motion.course) + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
+    const l2 = f ? 'fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–') + ' · cmp ' + dg(Compass.fresh())
+      : 'no fix yet';
+    el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
+  }
+
   // Cheap 1 Hz housekeeping for the pills (the map itself redraws only on events).
   setInterval(() => {
     if (document.visibilityState === 'hidden' || current !== 'map') return;
-    updateSpeedPill(); updateGpsPill(); updateMapPill();
+    updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
   }, 1000);
 
   // ------------------------------------------------------------------ location → everything
@@ -300,7 +315,7 @@
     if (!MapData.origin) MapData.tryCache(fix);
     MapData.update(fix);
     MapView.setFix(fix);
-    if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); }
+    if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); }
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
   Compass.onChange = () => { if (settings.mapMode === 'compass') MapView.requestDraw(); };
@@ -382,6 +397,7 @@
     ];
     $('status-list').innerHTML = rows.map(([k, v]) => `<div class="kv-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('btn-locretry').hidden = CH.DEMO;
+    $('btn-debug').textContent = 'Debug: ' + (settings.debug ? 'on' : 'off');
   }
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -405,6 +421,7 @@
     MapView.init($('map'));
     MapView.zoom = settings.zoom;
     Motion.mode = settings.mapMode;
+    Motion.roadLookup = MapData.nearestRoad;
     if (settings.mapMode === 'compass') Compass.attach();
     applyUnits();
     history.replaceState({ s: 'map', d: 0 }, '', location.pathname + location.search + '#map');
@@ -414,7 +431,7 @@
     Media.setSource(settings.media);
     Loc.watch(onFix);
     keepAwake();
-    updateGpsPill(); updateMapPill();
+    updateGpsPill(); updateMapPill(); updateDebug();
     if (CH.DEMO) toast('Demo: riding a loop at ' + fmtSpeed(Sim.speed) + ' ' + unitLabel(), 3000);
     console.info('Cycle Hub', CFG.VERSION, CH.DEMO ? '[demo]' : '');
   }

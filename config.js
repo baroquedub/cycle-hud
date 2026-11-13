@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.3.1',
+  VERSION: '0.4.0',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -31,6 +31,12 @@ window.CH.CONFIG = {
   ZOOMS: [2, 4, 8],
   DEFAULT_ZOOM: 1,
   WIDE_ZOOM_INDEX: 2,       // from this zoom step, keep 5x5 tiles loaded instead of 3x3
+
+  // Course snapping: lock the heading to the nearest loaded road within
+  // SNAP_RADIUS_M (widened when the fix is poor) whose direction is within
+  // SNAP_MAX_DEG of the way you're moving; crossing streets are ignored.
+  SNAP_RADIUS_M: 30,
+  SNAP_MAX_DEG: 60,
 
   DEFAULT_UNITS: 'mph',     // 'mph' or 'kmh'
 
