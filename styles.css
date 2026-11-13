@@ -54,7 +54,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   opacity: 0; z-index: 0;
 }
 .map-focus:focus-visible { outline: none; }
-#map { position: absolute; inset: 0; width: 600px; height: 600px; pointer-events: none; z-index: 1; }
+/* The map uses the top 400 px only: the lower part of the display is hard to
+   see while riding, so the media bar sits directly under the map instead. */
+#map { position: absolute; top: 0; left: 0; width: 600px; height: 400px; pointer-events: none; z-index: 1; }
 
 .pill {
   position: absolute;
@@ -87,7 +89,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* media bar */
 .media-bar {
   position: absolute; z-index: 2;
-  left: 8px; right: 8px; bottom: 8px;
+  left: 8px; right: 8px; top: 408px;   /* flush under the 400 px map */
   height: 88px;
   background: var(--surface);
   border-radius: var(--radius);

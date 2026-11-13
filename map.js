@@ -323,6 +323,14 @@
     { w: [1.5, 1, 0], col: '#8d98a3' },     // cycle / path / track
     { w: [1, 0, 0], col: '#6c7076' },       // service
   ];
+  // Perspective: the map plane is tilted away from you like a car sat-nav, so
+  // the road ahead reads as "ahead". The scale at the rider is unchanged;
+  // roads at the top edge of the map are drawn at TOP_SCALE of it (1 = flat
+  // top-down view). The far distance fades out over the top FADE_PX so the
+  // compressed horizon doesn't become a bright band. RIDER_FROM_BOTTOM is how
+  // much of the map is behind you.
+  const TILT = { TOP_SCALE: 0.38, FADE_PX: 150, RIDER_FROM_BOTTOM: 80 };
+  const CONE = { HALF_DEG: 28, LEN_PX: 130, RGB: '70,150,255' };
   const SCALE_METRIC = [[50, '50 m'], [100, '100 m'], [200, '200 m'], [500, '500 m'], [1000, '1 km'], [2000, '2 km'], [5000, '5 km']];
   const SCALE_IMPERIAL = [[91.44, '100 yd'], [182.9, '200 yd'], [402.3, '¼ mi'], [804.7, '½ mi'], [1609.3, '1 mi'], [3218.7, '2 mi'], [8046.7, '5 mi']];
 
@@ -337,7 +345,7 @@
     timer: null,
     frames: 0,
     lastFrameMs: 0,
-    riderXY: [300, 390],
+    riderXY: [300, 320],   // recomputed from the canvas size on every draw
 
     init(canvas) { MapView.canvas = canvas; },
     setFix(fix) { MapView.fix = fix; MapView.requestDraw(); },
@@ -386,11 +394,20 @@
       const th = hdg == null ? 0 : G.rad(hdg);
       const cos = Math.cos(th), sin = Math.sin(th);
       const scale = MapView.metresPerPx();
-      const [cx, cy] = MapView.riderXY;
+      const cx = w / 2, cy = h - TILT.RIDER_FROM_BOTTOM;
+      MapView.riderXY = [cx, cy];
+
+      // Tilted-plane projection. A point `fw` top-down px ahead of the rider and
+      // `ex` px to the right lands at (cx + ex*k, cy - fw*k) with k = HD/(HD+fw):
+      // k is 1 at the rider and shrinks towards the horizon HD px above it.
+      const HD = cy / (1 - TILT.TOP_SCALE);
+      const NEAR = -(h - cy + 40);            // clip plane just below the bottom edge
+      const FAR = cy * HD / (HD - cy);        // top-down px ahead that reach the top edge
+      const kNear = HD / (HD + NEAR);
 
       if (fix && MapData.origin && MapData.tiles.size) {
         const [rx, ry] = G.project([fix.lat, fix.lon], MapData.origin);
-        const R = scale * 430;
+        const R = scale * Math.max(FAR, (w / 2) / TILT.TOP_SCALE);
         const x0 = rx - R, x1 = rx + R, y0 = ry - R, y1 = ry + R;
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         const tiles = [...MapData.tiles.values()];
@@ -405,30 +422,73 @@
               const wy = ways[k], bb = wy.bb;
               if (bb[2] < x0 || bb[0] > x1 || bb[3] < y0 || bb[1] > y1) continue;
               const xy = wy.xy;
+              let pex = 0, pfw = 0, pin = false;
               for (let i = 0; i < xy.length; i += 2) {
                 const dx = xy[i] - rx, dy = xy[i + 1] - ry;
-                const sx = cx + (dx * cos - dy * sin) / scale;
-                const sy = cy - (dx * sin + dy * cos) / scale;
-                if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+                const ex = (dx * cos - dy * sin) / scale;
+                const fw = (dx * sin + dy * cos) / scale;
+                const inside = fw > NEAR;
+                if (i > 0 && inside !== pin) {
+                  // the segment crosses the near plane: cut it there so points
+                  // behind the camera never flip over the horizon
+                  const t = (NEAR - pfw) / (fw - pfw);
+                  const ix = cx + (pex + (ex - pex) * t) * kNear, iy = cy - NEAR * kNear;
+                  if (inside) ctx.moveTo(ix, iy); else ctx.lineTo(ix, iy);
+                }
+                if (inside) {
+                  const kk = HD / (HD + fw);
+                  const sx = cx + ex * kk, sy = cy - fw * kk;
+                  if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
+                }
+                pex = ex; pfw = fw; pin = inside;
               }
             }
           }
           ctx.strokeStyle = st.col; ctx.lineWidth = lw; ctx.stroke();
         }
+
+        // fade the far distance out (black is transparent on the glasses)
+        const fade = ctx.createLinearGradient(0, 0, 0, TILT.FADE_PX);
+        fade.addColorStop(0, 'rgba(0,0,0,0.95)');
+        fade.addColorStop(0.5, 'rgba(0,0,0,0.55)');
+        fade.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = fade; ctx.fillRect(0, 0, w, TILT.FADE_PX);
       }
 
-      // accuracy halo + rider marker
+      // accuracy halo + heading cone + rider marker
       if (fix) {
         const acc = fix.accuracy;
         if (finite(acc) && acc > 15 && acc < 200) {
           ctx.beginPath(); ctx.arc(cx, cy, acc / scale, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
         }
+        const course = CH.Motion.course;
+        const dirKnown = hdg != null || course != null;
+        // on-screen direction of travel: straight up when the map is rotated to
+        // the heading, otherwise (north up) the course itself
+        const dir = hdg == null && course != null ? G.rad(course) : 0;
+        if (dirKnown) {
+          // translucent blue cone showing where you're facing, projected through
+          // the same tilt as the roads so it lies on the map
+          const half = G.rad(CONE.HALF_DEG), L = CONE.LEN_PX;
+          ctx.beginPath(); ctx.moveTo(cx, cy);
+          for (let s = -half; s <= half + 1e-6; s += half / 6) {
+            const ex = L * Math.sin(dir + s), fw = L * Math.cos(dir + s);
+            const kk = HD / (HD + fw);
+            ctx.lineTo(cx + ex * kk, cy - fw * kk);
+          }
+          ctx.closePath();
+          const rr = L * HD / (HD + L * Math.cos(dir));
+          const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(20, rr));
+          g.addColorStop(0, 'rgba(' + CONE.RGB + ',0.75)');
+          g.addColorStop(0.45, 'rgba(' + CONE.RGB + ',0.4)');
+          g.addColorStop(1, 'rgba(' + CONE.RGB + ',0)');
+          ctx.fillStyle = g; ctx.fill();
+        }
         ctx.save();
         ctx.translate(cx, cy);
-        const course = CH.Motion.course;
-        if (course != null) {
-          if (hdg == null) ctx.rotate(G.rad(course));
+        if (dirKnown) {
+          ctx.rotate(dir);
           ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(12, 12); ctx.lineTo(0, 5); ctx.lineTo(-12, 12); ctx.closePath();
           ctx.fillStyle = '#FFFFFF'; ctx.fill();
           ctx.strokeStyle = '#0a0a0f'; ctx.lineWidth = 2; ctx.stroke();
@@ -458,8 +518,7 @@
         let pick = table[0];
         for (const row of table) { const px = row[0] / scale; if (px >= 60 && px <= 150) { pick = row; break; } if (px > 150) break; pick = row; }
         const px = pick[0] / scale;
-        const bar = document.getElementById('media-bar');
-        const y = (bar && !bar.hidden) ? 480 : 564;
+        const y = h - 22;
         ctx.strokeStyle = '#E4E6EB'; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.moveTo(24, y); ctx.lineTo(24 + px, y); ctx.moveTo(24, y - 6); ctx.lineTo(24, y + 6); ctx.moveTo(24 + px, y - 6); ctx.lineTo(24 + px, y + 6); ctx.stroke();
         ctx.fillStyle = '#E4E6EB'; ctx.font = '600 12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
