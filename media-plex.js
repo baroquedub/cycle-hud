@@ -21,7 +21,6 @@
   const Plex = {
     key: 'plex',
     label: 'Plex',
-    glyph: 'P',
     creds: null,
     clientId: null,
     cmdId: 0,
@@ -29,11 +28,11 @@
     playerName: '',
     canControl: true,
     lastError: '',
+    lastControl: '',       // what the last transport command came back with (for Status)
 
     start(creds) {
       Plex.creds = creds || null;
-      Plex.lastError = '';
-      Plex.canControl = CH.store.get('plexControl', true);
+      Plex.lastError = ''; Plex.lastControl = '';
       if (!Plex.clientId) {
         Plex.clientId = CH.store.get('plexClientId', null);
         if (!Plex.clientId) { Plex.clientId = uuid(); CH.store.set('plexClientId', Plex.clientId); }
@@ -74,18 +73,47 @@
       }
     },
 
-    async cmd(name) {
-      if (!Plex.creds) throw { auth: true };
-      if (!Plex.player) throw { code: 404 };
+    // The server's companion client list: what /player/playback can actually
+    // reach right now. Plexamp drops out of it when the phone app has been in
+    // the background or restarted, even while /status/sessions still reports
+    // the track, so a 404 on a command means "look the player up again".
+    async refreshPlayer() {
+      try {
+        const res = await fetch(Plex.url('/clients'), { headers: { Accept: 'application/json' } });
+        if (!res.ok) { Plex.lastControl = 'clients HTTP ' + res.status; return false; }
+        const j = await res.json();
+        const list = ((j && j.MediaContainer && j.MediaContainer.Server) || [])
+          .filter((c) => c.machineIdentifier && /playback/.test(c.protocolCapabilities || ''));
+        const match = list.find((c) => c.machineIdentifier === Plex.player)
+          || list.find((c) => /plexamp/i.test(c.product || '') || /plexamp/i.test(c.name || ''));
+        if (!match) { Plex.lastControl = 'player not in server client list (' + list.length + ' clients)'; return false; }
+        Plex.player = match.machineIdentifier; Plex.playerName = match.name || match.product || Plex.playerName;
+        return true;
+      } catch (e) { Plex.lastControl = 'clients: ' + ((e && e.message) || 'error'); return false; }
+    },
+
+    send(name) {
       Plex.cmdId++;
-      const u = Plex.url('/player/playback/' + name, {
+      return fetch(Plex.url('/player/playback/' + name, {
         type: 'music',
         commandID: String(Plex.cmdId),
         'X-Plex-Target-Client-Identifier': Plex.player,
         'X-Plex-Client-Identifier': Plex.clientId,
-      });
-      const res = await fetch(u);
-      if (!res.ok) throw { code: res.status };
+      }));
+    },
+
+    async cmd(name) {
+      if (!Plex.creds) throw { auth: true };
+      if (!Plex.player) await Plex.poll();                       // first command before the first poll
+      if (!Plex.player) { Plex.lastControl = 'no player id yet'; throw { code: 404, local: true }; }
+      let res = await Plex.send(name);
+      if (res.status === 404 && await Plex.refreshPlayer()) res = await Plex.send(name);   // retry once with a fresh id
+      if (!res.ok) {
+        if (res.status === 404) Plex.lastControl = 'server 404: player not reachable';
+        else Plex.lastControl = 'control HTTP ' + res.status;
+        throw { code: res.status };
+      }
+      Plex.lastControl = name + ' ok';
     },
     play() { return Plex.cmd('play'); },
     pause() { return Plex.cmd('pause'); },
@@ -95,13 +123,14 @@
     describe(err) {
       if (!err) return 'Plex error';
       if (err.auth) return 'Plex: pair on phone';
-      if (err.code === 404) return 'Plex: no player found';
+      if (err.code === 404 && err.local) return 'Plex: nothing playing yet';
+      if (err.code === 404) return 'Plex: player not reachable — open Plexamp';
       return 'Plex: control unavailable';
     },
 
     statusText() {
       if (!Plex.creds) return 'not paired';
-      return 'paired · ' + (Plex.playerName ? 'player ' + Plex.playerName : 'no player yet') + (Plex.canControl ? '' : ' · control off') + (Plex.lastError ? ' · ' + Plex.lastError : '');
+      return 'paired · ' + (Plex.playerName ? 'player ' + Plex.playerName : 'no player yet') + (Plex.lastError ? ' · ' + Plex.lastError : '') + (Plex.lastControl ? ' · last control: ' + Plex.lastControl : '');
     },
   };
   CH.PlexSource = Plex;

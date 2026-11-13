@@ -13,7 +13,6 @@
   const Spotify = {
     key: 'spotify',
     label: 'Spotify',
-    glyph: 'S',
     creds: null,
     refreshing: null,
     canControl: true,

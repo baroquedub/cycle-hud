@@ -36,7 +36,6 @@
       const src = Media.sources()[key];
       Media.source = src;
       bar.hidden = false;
-      $('media-glyph').textContent = src.glyph;
       const creds = CH.store.get(key, null);
       if (!src.start(creds)) { Media.last = { state: 'auth', playing: false, title: '', artist: '' }; Media.render(); return; }
       Media.backoff = CFG.MEDIA_POLL_MS;
@@ -83,14 +82,14 @@
       const bar = $('media-bar');
       if (bar.hidden) return;
       const L = Media.last, src = Media.source;
-      const title = $('media-title'), artist = $('media-artist'), play = $('media-play');
+      const title = $('media-title'), artist = $('media-artist'), glyph = $('media-glyph');
       let t = L.title, a = L.artist;
       if (L.state === 'idle' && !t) { t = 'Nothing playing'; a = 'Start it on your phone'; }
       else if (L.state === 'auth') { t = src ? src.label + ' not paired' : 'Not paired'; a = 'Menu → Pair phone'; }
       else if (L.state === 'offline') { a = (a ? a + ' · ' : '') + 'Reconnecting…'; }
       if (title.textContent !== t) { title.textContent = t; Media.marquee(title, t); }
       artist.textContent = a;
-      play.textContent = L.playing ? '❚❚' : '▶';
+      glyph.textContent = L.playing ? '❚❚' : '▶';      // play state, not the source
       title.classList.toggle('paused', !L.playing || document.visibilityState === 'hidden');
       bar.classList.toggle('dim', L.state !== 'ok');
     },
@@ -124,7 +123,6 @@
         await src[name]();
       } catch (e) {
         Media.toast(src.describe(e));
-        if (src.key === 'plex' && e && !e.auth && e.code !== 404) { src.canControl = false; CH.store.set('plexControl', false); }
       }
       Media.schedule(600);
     },

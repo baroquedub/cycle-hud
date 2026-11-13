@@ -344,7 +344,6 @@
     }
     if (p.plex && typeof p.plex === 'object' && p.plex.url && p.plex.token) {
       store.set('plex', { url: String(p.plex.url), token: String(p.plex.token) });
-      store.set('plexControl', true);
       settings.media = 'plex'; store.set('media', 'plex');
       Media.setSource('plex');
       pairMsg = 'Plex connected ✓';
