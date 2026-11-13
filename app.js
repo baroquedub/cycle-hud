@@ -69,6 +69,7 @@
     else MapView.stop();
     if (name === 'menu') renderMenu();
     if (name === 'pair') renderPair();
+    if (name === 'pair' || was === 'pair') Relay.setFastPoll(name === 'pair');
     if (name === 'status') renderStatus();
     if (was === 'status' || name === 'status') scheduleStatus();
     focusScreen(name);
@@ -303,12 +304,17 @@
     $('pair-code').textContent = Relay.pretty();
     renderRelayDot();
   }
+  let pairMsg = '';   // last confirmation shown on the Pair screen
   function renderRelayDot() {
     const el = $('pair-status');
     if (!el) return;
-    el.classList.toggle('on', Relay.connected);
-    $('pair-status-text').textContent = Relay.connected ? 'Ready — waiting for your phone' : 'Connecting…';
+    const recent = Relay.lastDeliveredAt && Date.now() - Relay.lastDeliveredAt < 180000;
+    el.classList.toggle('on', Relay.connected || recent);
+    el.classList.toggle('paired', recent);
+    $('pair-status-text').textContent = recent ? (pairMsg || 'Phone paired ✓') + ' · ' + ago(Relay.lastDeliveredAt)
+      : Relay.connected ? 'Ready — waiting for your phone' : 'Connecting…';
   }
+  setInterval(() => { if (current === 'pair') renderRelayDot(); }, 2000);
   Relay.onStatus = renderRelayDot;
   Relay.onMessage = (p) => {
     if (p.spotify && typeof p.spotify === 'object' && p.spotify.refreshToken && p.spotify.clientId) {
@@ -318,8 +324,10 @@
       });
       settings.media = 'spotify'; store.set('media', 'spotify');
       Media.setSource('spotify');
-      toast('Spotify connected ✓');
+      pairMsg = 'Spotify connected ✓';
+      toast(pairMsg);
       if (current === 'menu') renderMenu();
+      renderRelayDot();
       return;
     }
     if (p.plex && typeof p.plex === 'object' && p.plex.url && p.plex.token) {
@@ -327,11 +335,13 @@
       store.set('plexControl', true);
       settings.media = 'plex'; store.set('media', 'plex');
       Media.setSource('plex');
-      toast('Plex connected ✓');
+      pairMsg = 'Plex connected ✓';
+      toast(pairMsg);
       if (current === 'menu') renderMenu();
+      renderRelayDot();
       return;
     }
-    if (p.ping) toast('Phone paired ✓');
+    if (p.ping) { pairMsg = 'Phone paired ✓'; toast(pairMsg); renderRelayDot(); }
   };
 
   // ------------------------------------------------------------------ status screen

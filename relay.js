@@ -11,6 +11,7 @@
   const Relay = {
     base: String(CFG.RELAY_URL || 'https://ntfy.sh').replace(/\/+$/, ''),
     code: null, es: null, connected: false, seen: [],
+    sinceId: null, pollTimer: null, pollFast: false, lastDeliveredAt: 0,
     onMessage: null,   // app hook (payload)
     onStatus: null,    // app hook (connected)
 
@@ -30,15 +31,12 @@
       if (reset || !store.get('pairCode', null)) store.set('pairCode', Relay.newCode());
       Relay.code = store.get('pairCode', null);
       if (Relay.es) { Relay.es.close(); Relay.es = null; }
+      Relay.sinceId = null;
       Relay.setStatus(false);
-      // Anything sent while the app was closed (last 15 min)?
-      fetch(`${Relay.base}/${Relay.topic()}/json?poll=1&since=15m`).then((r) => r.text()).then((txt) => {
-        const msgs = txt.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } })
-          .filter((m) => m && m.event === 'message');
-        const fresh = msgs.filter((m) => !Relay.seen.includes(m.id));
-        fresh.forEach((m) => Relay.markSeen(m.id));
-        fresh.forEach((m) => Relay.deliver(m));
-      }).catch(() => {});
+      // Anything sent while the app was closed (last 15 min)? Then keep
+      // polling as a fallback in case the live stream is silent on this browser.
+      Relay.poll('15m');
+      Relay.schedulePoll();
       if (!('EventSource' in window)) return;
       try {
         const es = new EventSource(`${Relay.base}/${Relay.topic()}/sse`);
@@ -55,6 +53,31 @@
       } catch (e) { console.warn('relay', e); }
     },
 
+    // Fetch cached messages newer than the last one we saw.
+    poll(since) {
+      if (!Relay.code) return Promise.resolve();
+      const s = since || Relay.sinceId || '15m';
+      return fetch(`${Relay.base}/${Relay.topic()}/json?poll=1&since=${encodeURIComponent(s)}`, { cache: 'no-store' })
+        .then((r) => r.text()).then((txt) => {
+          const msgs = txt.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } })
+            .filter((m) => m && m.event === 'message');
+          if (msgs.length) Relay.sinceId = msgs[msgs.length - 1].id;
+          const fresh = msgs.filter((m) => !Relay.seen.includes(m.id));
+          fresh.forEach((m) => Relay.markSeen(m.id));
+          fresh.forEach((m) => Relay.deliver(m));
+        }).catch(() => {});
+    },
+
+    // Poll every 4 s while the Pair screen is open, every 30 s otherwise.
+    schedulePoll() {
+      clearTimeout(Relay.pollTimer);
+      Relay.pollTimer = setTimeout(async () => {
+        if (document.visibilityState !== 'hidden') await Relay.poll();
+        Relay.schedulePoll();
+      }, Relay.pollFast ? 4000 : 30000);
+    },
+    setFastPoll(on) { Relay.pollFast = on; Relay.schedulePoll(); if (on) Relay.poll(); },
+
     markSeen(id) { Relay.seen = [id, ...Relay.seen].slice(0, 30); CH.store.set('relaySeen', Relay.seen); },
 
     setStatus(on) {
@@ -66,6 +89,7 @@
       if (m.time && Date.now() / 1000 - m.time > 15 * 60) return;
       let p; try { p = JSON.parse(m.message); } catch { return; }
       if (!p || typeof p !== 'object') return;
+      Relay.lastDeliveredAt = Date.now();
       if (Relay.onMessage) Relay.onMessage(p);
     },
   };

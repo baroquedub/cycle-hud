@@ -27,7 +27,7 @@ Built for the glasses' 600×600 additive display (black is see-through), Neural 
 
 ## Pairing your phone (for Spotify and Plex)
 
-Typing on a phone is far easier than on the glasses, and sign-in tokens must never be committed to a public repo. So the phone page `pair.html` does the sign-in and sends the result straight to the glasses through a private [ntfy.sh](https://ntfy.sh) topic named after a pairing code (nothing is stored on the relay).
+Typing on a phone is far easier than on the glasses, and sign-in tokens must never be committed to a public repo. So the phone page `pair.html` does the sign-in and sends the result to the glasses through a private [ntfy.sh](https://ntfy.sh) topic named after a pairing code. The relay holds each message for up to 12 hours so the glasses can pick it up even if they were asleep; only someone who knows your pairing code could read it.
 
 1. On the glasses: menu → **Pair phone**. You'll see the page address and an 8-character code.
 2. On your phone, open `https://baroquedub.github.io/cycle-hub/pair.html` and enter the code. The glasses say "Phone paired".

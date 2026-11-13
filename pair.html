@@ -55,7 +55,7 @@
   <!-- ============ SPOTIFY ============ -->
   <section class="card">
     <h2>2. Spotify</h2>
-    <p class="hint">Needs Spotify Premium and a free Spotify developer app (one-time, see below). Your sign-in token goes straight from this phone to the glasses; it is never stored here or on the relay.</p>
+    <p class="hint">Needs Spotify Premium and a free Spotify developer app (one-time, see below). Your sign-in token goes from this page to the glasses through the relay, which holds it for up to 12 hours under your private pairing code; it is not stored on this page.</p>
     <label for="sp-client">Spotify app Client ID</label>
     <input id="sp-client" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="32-character client id">
     <button class="btn" id="sp-connect">Connect Spotify</button>
@@ -135,12 +135,13 @@
     $('pair-change').addEventListener('click', () => { code = ''; store.set('code', null); $('code-input').value = ''; $('pair-save').disabled = true; renderPair(); $('code-input').focus(); });
     $('pair-ping').addEventListener('click', async () => { const ok = await send({ ping: true }, true); setStatus('pair-status', ok ? 'Sent. The glasses should say "Phone paired".' : 'The relay did not answer.', ok ? 'ok' : 'bad'); });
 
-    // Everything is sent with cache=no: delivered only to glasses listening right now, never stored on the relay.
+    // Messages are held by the relay for a short while so the glasses can pick
+    // them up by polling even when their live stream is silent.
     async function send(payload, silent = false) {
       if (!code) { toast('Pair with your glasses first'); $('code-input').focus(); return false; }
       try {
         const body = Object.assign({ v: 1 }, payload);
-        const res = await fetch(`${RELAY}/${CFG.RELAY_PREFIX}${code.toLowerCase()}?cache=no`, { method: 'POST', body: JSON.stringify(body) });
+        const res = await fetch(`${RELAY}/${CFG.RELAY_PREFIX}${code.toLowerCase()}`, { method: 'POST', body: JSON.stringify(body) });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         if (!silent) { toast('Sent to glasses ✓'); if (navigator.vibrate) navigator.vibrate(30); }
         return true;
