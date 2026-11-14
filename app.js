@@ -216,7 +216,7 @@
     MapView.enabled = current === 'map' && settings.view === 'map';
     if (MapView.enabled) { if (MapView.resume()) Loc.refresh(); } else MapView.stop();
     Media.remeasure();
-    updateDebug();
+    updateDebug(); updateGpsPill(); updateMapPill();
   }
   function toggleView() {
     settings.view = settings.view === 'map' ? 'dash' : 'map';
@@ -292,6 +292,7 @@
     if (Loc.status.state === 'denied') msg = 'Location blocked';
     else if (!f || age > 30000) msg = 'Waiting for GPS';
     else if (age > 10000 || (G.finite(f.accuracy) && f.accuracy > 60)) msg = 'Weak GPS';
+    if (settings.view === 'dash' && msg !== 'Location blocked') msg = '';   // no map on show: only something you must act on
     el.hidden = !msg;
     if (msg) el.textContent = msg;
   }
@@ -303,6 +304,7 @@
     else if (MapData.status === 'error') msg = 'Map data unavailable';
     else if (MapData.status === 'idle' && Loc.last) msg = 'Loading map…';
     else if (settings.view === 'map' && MapView.isStale(Date.now())) msg = 'Map out of date…';
+    if (settings.view === 'dash') msg = '';   // map notices mean nothing without the map
     el.hidden = !msg;
     if (msg) el.textContent = msg;
   }
