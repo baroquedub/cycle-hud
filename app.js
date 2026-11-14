@@ -25,14 +25,14 @@
     units: store.get('units', CFG.DEFAULT_UNITS),         // 'mph' | 'kmh'
     mapMode: store.get('mapMode', 'auto'),                 // 'auto' (facing up) | 'north'
     view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock)
-    media: store.get('media', 'off'),                      // 'spotify' | 'plex' | 'off'
+    media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off'
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
     debug: store.get('debug', true),                       // on-map readout, toggled on the Status screen
   };
   if (!['mph', 'kmh'].includes(settings.units)) settings.units = CFG.DEFAULT_UNITS;
   if (!['auto', 'north'].includes(settings.mapMode)) settings.mapMode = 'auto';
   if (!['map', 'dash'].includes(settings.view)) settings.view = 'map';
-  if (!['spotify', 'plex', 'off'].includes(settings.media)) settings.media = 'off';
+  if (!['auto', 'spotify', 'plex', 'off'].includes(settings.media)) settings.media = 'auto';
   if (!(settings.zoom >= 0 && settings.zoom < CFG.ZOOMS.length)) settings.zoom = CFG.DEFAULT_ZOOM;
   CH.settings = settings;
 
@@ -214,7 +214,7 @@
   function applyView() {
     $('screen-map').classList.toggle('dash', settings.view === 'dash');
     MapView.enabled = current === 'map' && settings.view === 'map';
-    if (MapView.enabled) MapView.requestDraw(); else MapView.stop();
+    if (MapView.enabled) { if (MapView.resume()) Loc.refresh(); } else MapView.stop();
     Media.remeasure();
     updateDebug();
   }
@@ -240,7 +240,7 @@
     $('row-units').textContent = 'Units: ' + unitLabel();
     $('row-mapmode').textContent = 'Map: ' + mapModeLabel();
     $('row-zoom').textContent = 'Zoom: ' + CFG.ZOOM_LABELS[MapView.zoom];
-    $('row-media').textContent = 'Media: ' + ({ spotify: 'Spotify', plex: 'Plex', off: 'Off' })[settings.media];
+    $('row-media').textContent = 'Media: ' + ({ auto: 'Auto', spotify: 'Spotify', plex: 'Plex', off: 'Off' })[settings.media];
   }
   Media.onState = () => { if (current === 'menu') renderMenu(); };
 
@@ -263,7 +263,7 @@
   }
 
   function cycleMedia() {
-    const order = ['spotify', 'plex', 'off'];
+    const order = ['auto', 'spotify', 'plex', 'off'];
     settings.media = order[(order.indexOf(settings.media) + 1) % order.length];
     store.set('media', settings.media);
     Media.setSource(settings.media);
@@ -302,7 +302,7 @@
     if (MapData.status === 'loading') msg = 'Loading map…';
     else if (MapData.status === 'error') msg = 'Map data unavailable';
     else if (MapData.status === 'idle' && Loc.last) msg = 'Loading map…';
-    else if (Loc.last && Date.now() - Loc.last.t > CFG.STALE_FIX_MS && settings.view === 'map') msg = 'Map out of date…';
+    else if (settings.view === 'map' && MapView.isStale(Date.now())) msg = 'Map out of date…';
     el.hidden = !msg;
     if (msg) el.textContent = msg;
   }
@@ -316,7 +316,7 @@
     const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
     const b = Math.round(Motion.bias);
     const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + (Motion.sign < 0 ? ' inv' : '') + ' b' + (b >= 0 ? '+' : '') + b + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
-    const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
+    const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's' + (f.ts ? '/' + Math.max(0, Math.round((Date.now() - f.ts) / 1000)) + 's' : '') + ' ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
       : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
   }
@@ -326,7 +326,7 @@
     if (document.visibilityState === 'hidden' || current !== 'map') return;
     updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
-    if (MapView.enabled && !MapView.stale && Loc.last && Date.now() - Loc.last.t > CFG.STALE_FIX_MS) MapView.requestDraw();
+    if (MapView.enabled && !MapView.stale && MapView.isStale(Date.now())) MapView.requestDraw();
   }, 1000);
 
   // ------------------------------------------------------------------ location → everything
@@ -369,8 +369,8 @@
         clientId: String(p.spotify.clientId), refreshToken: String(p.spotify.refreshToken),
         accessToken: p.spotify.accessToken || '', expiresAt: Number(p.spotify.expiresAt) || 0,
       });
-      settings.media = 'spotify'; store.set('media', 'spotify');
-      Media.setSource('spotify');
+      if (settings.media !== 'auto') { settings.media = 'spotify'; store.set('media', 'spotify'); }
+      Media.setSource(settings.media);
       pairMsg = 'Spotify connected ✓';
       toast(pairMsg);
       if (current === 'menu') renderMenu();
@@ -379,8 +379,8 @@
     }
     if (p.plex && typeof p.plex === 'object' && p.plex.url && p.plex.token) {
       store.set('plex', { url: String(p.plex.url), token: String(p.plex.token) });
-      settings.media = 'plex'; store.set('media', 'plex');
-      Media.setSource('plex');
+      if (settings.media !== 'auto') { settings.media = 'plex'; store.set('media', 'plex'); }
+      Media.setSource(settings.media);
       pairMsg = 'Plex connected ✓';
       toast(pairMsg);
       if (current === 'menu') renderMenu();
@@ -400,7 +400,7 @@
     const f = Loc.last;
     const rows = [
       ['Location', CH.DEMO ? 'demo rider' : Loc.status.state + (Loc.status.code != null ? ' (code ' + Loc.status.code + ')' : '')],
-      ['Last fix', f ? ago(f.t) + ' · ±' + Math.round(f.accuracy) + ' m' : 'none'],
+      ['Last fix', f ? ago(f.t) + (f.ts ? ' (position ' + ago(f.ts) + ')' : '') + ' · ±' + Math.round(f.accuracy) + ' m' : 'none'],
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
@@ -433,7 +433,7 @@
     } catch { /* not supported — fine */ }
   }
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') { keepAwake(); if (current === 'map') MapView.requestDraw(); }
+    if (document.visibilityState === 'visible') { keepAwake(); if (MapView.enabled) MapView.resume(); }   // geo.js restarts the location watch itself
     else MapView.stop();
   });
 

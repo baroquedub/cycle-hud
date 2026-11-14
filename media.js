@@ -9,8 +9,11 @@
   const $ = (id) => document.getElementById(id);
 
   const Media = {
-    sourceKey: 'off',
-    source: null,
+    sourceKey: 'off',    // 'auto' | 'spotify' | 'plex' | 'off'
+    source: null,        // the source being shown and controlled
+    other: null,         // in auto: the other paired source, checked when this one isn't playing
+    pollId: 0,           // bumps whenever a poll result would be stale (source change, page woke up)
+    visibleAt: 0,
     timer: null,
     inflight: false,
     inflightAt: 0,
@@ -27,18 +30,21 @@
 
     setSource(key) {
       Media.stopPolling();
-      if (Media.source) Media.source.stop();
+      const all = Media.sources();
+      for (const k of Object.keys(all)) all[k].stop();
       Media.sourceKey = key;
-      Media.source = null;
+      Media.source = null; Media.other = null;
+      Media.pollId++; Media.inflight = false;
       Media.last = { state: 'idle', playing: false, title: '', artist: '' };
       Media.lastTitle = null;
       const bar = $('media-bar');
       if (key === 'off') { bar.hidden = true; Media.render(); return; }
-      const src = Media.sources()[key];
-      Media.source = src;
       bar.hidden = false;
-      const creds = CH.store.get(key, null);
-      if (!src.start(creds)) { Media.last = { state: 'auth', playing: false, title: '', artist: '' }; Media.render(); return; }
+      const keys = key === 'auto' ? ['spotify', 'plex'] : [key];
+      const ready = keys.filter((k) => all[k].start(CH.store.get(k, null)));   // the paired ones
+      if (!ready.length) { Media.source = all[keys[0]]; Media.last = { state: 'auth', playing: false, title: '', artist: '' }; Media.render(); return; }
+      Media.source = all[ready[0]];
+      Media.other = ready.length > 1 ? all[ready[1]] : null;
       Media.backoff = CFG.MEDIA_POLL_MS;
       Media.schedule(0);
     },
@@ -54,14 +60,28 @@
       if (!Media.source) return;
       if (Media.inflight) { if (Date.now() - Media.inflightAt < 30000) return; Media.inflight = false; }   // a stuck poll must not block the next
       if (document.visibilityState === 'hidden') { Media.schedule(5000); return; }
+      const id = ++Media.pollId;
       Media.inflight = true; Media.inflightAt = Date.now();
-      let r;
-      try { r = await Media.source.poll(); } catch (e) { r = { state: 'offline' }; }
+      let r, src = Media.source;
+      try { r = await src.poll(); } catch (e) { r = { state: 'offline' }; }
+      // Auto: if what we're showing isn't playing, see whether the other service is
+      if (id === Media.pollId && Media.other && !(r.state === 'ok' && r.playing)) {
+        let ro = null;
+        try { ro = await Media.other.poll(); } catch (e) { ro = null; }
+        if (id === Media.pollId && ro && ro.state === 'ok' && ro.playing) {
+          const o = Media.other; Media.other = Media.source; Media.source = o; src = o; r = ro;
+          Media.lastTitle = null;
+        }
+      }
+      if (id !== Media.pollId) return;          // superseded: the source changed or the page woke up
       Media.inflight = false;
       Media.lastPollAt = Date.now();
+      // A timeout that fires just after the page became visible is the timer
+      // the browser suspended while the display was off, not the network.
+      if (r.state === 'offline' && src.lastError === 'timeout' && Date.now() - Media.visibleAt < CFG.MEDIA_FETCH_TIMEOUT_MS) { Media.schedule(0); return; }
       Media.apply(r);
       let next = CFG.MEDIA_POLL_MS;
-      if (r.state === 'offline') { Media.backoff = Math.min(60000, Media.backoff * 2); next = Media.backoff; }
+      if (r.state === 'offline') { Media.backoff = Math.min(20000, Media.backoff * 2); next = Media.backoff; }
       else if (r.state === 'ratelimit') next = r.retryAfterMs || 10000;
       else if (r.state === 'auth') { Media.render(); return; }     // stop until re-paired
       else Media.backoff = CFG.MEDIA_POLL_MS;
@@ -134,7 +154,11 @@
 
     // visibility: pause/resume the poll and marquee
     onVisibility() {
-      if (document.visibilityState === 'visible') { if (Media.source && Media.last.state !== 'auth') { Media.backoff = CFG.MEDIA_POLL_MS; Media.schedule(0); } }
+      if (document.visibilityState === 'visible') {
+        // whatever was in flight when the display went off is not coming back: start afresh
+        Media.visibleAt = Date.now(); Media.pollId++; Media.inflight = false;
+        if (Media.source && Media.last.state !== 'auth') { Media.backoff = CFG.MEDIA_POLL_MS; Media.schedule(0); }
+      }
       Media.render();
     },
 
@@ -142,7 +166,7 @@
       if (Media.sourceKey === 'off') return 'off';
       const s = Media.source ? Media.source.statusText() : '';
       const age = Media.lastPollAt ? Math.round((Date.now() - Media.lastPollAt) / 1000) + ' s ago' : 'never';
-      return Media.sourceKey + ' · ' + Media.last.state + ' · polled ' + age + (s ? ' · ' + s : '');
+      return Media.sourceKey + (Media.other && Media.source ? ' (' + Media.source.key + ')' : '') + ' · ' + Media.last.state + ' · polled ' + age + (s ? ' · ' + s : '');
     },
   };
   document.addEventListener('visibilitychange', () => Media.onVisibility());

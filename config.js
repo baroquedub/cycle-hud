@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.5.1',
+  VERSION: '0.5.2',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -57,10 +57,12 @@ window.CH.CONFIG = {
   COMPASS_FLIP_MS: 1000,
   COMPASS_FLIP_HOLD_MS: 6000,   // ...or, on a straight road, disagrees that much for this long with fixes arriving
 
-  // A fix older than this (display was off, or the dash view) means the map
-  // no longer shows where you are: it's drawn greyed out and pulsing until a
-  // new fix lands.
+  // A fix older than this is suspect when we were moving at the time, or when
+  // the map has just come back after being away for AWAY_MS (display off, dash
+  // view): the map is drawn greyed out and pulsing until a new fix lands.
+  // Stationary, an old fix is still right, so nothing changes.
   STALE_FIX_MS: 4000,
+  AWAY_MS: 30000,
 
   MEDIA_FETCH_TIMEOUT_MS: 10000,   // a request that never answers must not stall the player
 

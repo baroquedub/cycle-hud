@@ -377,7 +377,9 @@
     frames: 0,
     lastFrameMs: 0,
     riderXY: [300, 320],   // recomputed from the canvas size on every draw
-    stale: false,          // last fix too old: drawn dim until a new one lands
+    stale: false,          // last fix suspect: drawn dim until a new one lands
+    stoppedAt: 0,          // when drawing stopped (menu, dash view, display off)
+    resumeAt: 0,           // when drawing came back after a long absence
 
     init(canvas) { MapView.canvas = canvas; },
     setFix(fix) { MapView.fix = fix; MapView.requestDraw(); },
@@ -404,7 +406,23 @@
       const wait = Math.max(0, 100 - (Date.now() - MapView.lastDrawAt));
       MapView.timer = setTimeout(() => requestAnimationFrame(MapView.draw), wait);
     },
-    stop() { clearTimeout(MapView.timer); MapView.queued = false; },
+    stop() { clearTimeout(MapView.timer); MapView.queued = false; if (!MapView.stoppedAt) MapView.stoppedAt = Date.now(); },
+    // Drawing is back on. Returns true when it had been off long enough that
+    // the last fix may no longer be where we are.
+    resume() {
+      const away = MapView.stoppedAt && Date.now() - MapView.stoppedAt > CFG.AWAY_MS;
+      if (away) MapView.resumeAt = Date.now();
+      MapView.stoppedAt = 0;
+      MapView.requestDraw();
+      return !!away;
+    },
+    // An old fix is still right if we're stationary; it's suspect if we were
+    // moving when the fixes stopped, or it predates coming back from a long absence.
+    isStale(now) {
+      const fix = MapView.fix;
+      if (!fix || now - fix.t <= CFG.STALE_FIX_MS) return false;
+      return CH.Motion.speed > 0.5 || fix.t < MapView.resumeAt;
+    },
 
     draw() {
       MapView.queued = false;
@@ -425,7 +443,7 @@
       // Out-of-date position (display was off, or the dash view was up): the
       // tiles are where you were, not where you are. Dim and pulse until a
       // fresh fix lands.
-      const stale = !fix || now - fix.t > CFG.STALE_FIX_MS;
+      const stale = MapView.isStale(now);
       MapView.stale = stale;
       if (stale) ctx.globalAlpha = 0.28 + 0.1 * Math.sin(now / 350);
       const north = CH.Motion.mode === 'north';

@@ -74,7 +74,8 @@
 
     norm(pos) {
       const c = pos.coords;
-      return { lat: c.latitude, lon: c.longitude, accuracy: c.accuracy, heading: c.heading, speed: c.speed, t: Date.now() };
+      // t = when we received it (what the app keys on); ts = the position's own timestamp, for diagnosis
+      return { lat: c.latitude, lon: c.longitude, accuracy: c.accuracy, heading: c.heading, speed: c.speed, t: Date.now(), ts: finite(pos.timestamp) ? pos.timestamp : null };
     },
 
     setStatus(state, msg, code = null) {
@@ -157,6 +158,13 @@
       } catch { begin(); }
       setTimeout(begin, 4000);
       Loc.checkPermission();
+    },
+
+    // Back from a long absence (display off, dash view): make sure a fix is on its way.
+    refresh() {
+      if (DEMO || !Loc.started || Loc.fresh(30000)) return;
+      Loc.fails = 0;
+      Loc.startWatch();
     },
 
     restart() {
@@ -329,7 +337,7 @@
       if (finite(f.speed) && f.speed >= 0) raw = f.speed;
       else if (Motion.prev) {
         const dt = (f.t - Motion.prev.t) / 1000;
-        if (dt >= 0.5 && dt <= 10 && f.accuracy < 50 && Motion.prev.accuracy < 50) {
+        if (dt >= 0.5 && dt <= 30 && f.accuracy < 50 && Motion.prev.accuracy < 50) {   // sparse fixes while stationary still bring the speed down
           raw = haversine([Motion.prev.lat, Motion.prev.lon], [f.lat, f.lon]) / dt;
         }
       }
