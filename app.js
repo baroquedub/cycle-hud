@@ -302,6 +302,7 @@
     if (MapData.status === 'loading') msg = 'Loading map…';
     else if (MapData.status === 'error') msg = 'Map data unavailable';
     else if (MapData.status === 'idle' && Loc.last) msg = 'Loading map…';
+    else if (Loc.last && Date.now() - Loc.last.t > CFG.STALE_FIX_MS && settings.view === 'map') msg = 'Map out of date…';
     el.hidden = !msg;
     if (msg) el.textContent = msg;
   }
@@ -314,7 +315,7 @@
     const f = Loc.last;
     const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
     const b = Math.round(Motion.bias);
-    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + ' b' + (b >= 0 ? '+' : '') + b + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
+    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + (Motion.sign < 0 ? ' inv' : '') + ' b' + (b >= 0 ? '+' : '') + b + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
     const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
       : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
@@ -324,6 +325,8 @@
   setInterval(() => {
     if (document.visibilityState === 'hidden' || current !== 'map') return;
     updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
+    // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
+    if (MapView.enabled && !MapView.stale && Loc.last && Date.now() - Loc.last.t > CFG.STALE_FIX_MS) MapView.requestDraw();
   }, 1000);
 
   // ------------------------------------------------------------------ location → everything
@@ -401,7 +404,7 @@
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
-      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · bias ' + Math.round(Motion.bias) + '°'],
+      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · bias ' + Math.round(Motion.bias) + '°' + (Motion.sign < 0 ? ' · inverted' : '') + ' · flips ' + Motion.flips],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
@@ -439,6 +442,7 @@
     MapView.init($('map'));
     MapView.zoom = settings.zoom;
     Motion.mode = settings.mapMode;
+    Motion.sign = store.get('compassSign', 1) === -1 ? -1 : 1;
     Motion.roadLookup = MapData.nearestRoad;
     // The compass is always part of the heading. Try straight away (attaches
     // directly where no permission API exists); where a prompt needs a user

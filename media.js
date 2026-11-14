@@ -13,6 +13,7 @@
     source: null,
     timer: null,
     inflight: false,
+    inflightAt: 0,
     backoff: CFG.MEDIA_POLL_MS,
     last: { state: 'idle', playing: false, title: '', artist: '' },
     lastPollAt: 0,
@@ -50,9 +51,10 @@
     stopPolling() { clearTimeout(Media.timer); Media.timer = null; },
 
     async tick() {
-      if (!Media.source || Media.inflight) return;
+      if (!Media.source) return;
+      if (Media.inflight) { if (Date.now() - Media.inflightAt < 30000) return; Media.inflight = false; }   // a stuck poll must not block the next
       if (document.visibilityState === 'hidden') { Media.schedule(5000); return; }
-      Media.inflight = true;
+      Media.inflight = true; Media.inflightAt = Date.now();
       let r;
       try { r = await Media.source.poll(); } catch (e) { r = { state: 'offline' }; }
       Media.inflight = false;
@@ -86,7 +88,7 @@
       let t = L.title, a = L.artist;
       if (L.state === 'idle' && !t) { t = 'Nothing playing'; a = 'Start it on your phone'; }
       else if (L.state === 'auth') { t = src ? src.label + ' not paired' : 'Not paired'; a = 'Menu → Pair phone'; }
-      else if (L.state === 'offline') { a = (a ? a + ' · ' : '') + 'Reconnecting…'; }
+      else if (L.state === 'offline') { a = (a ? a + ' · ' : '') + 'Reconnecting…' + (src && src.lastError ? ' (' + src.lastError + ')' : ''); }
       if (title.textContent !== t) { title.textContent = t; Media.marquee(title, t); }
       artist.textContent = a;
       glyph.textContent = L.playing ? '❚❚' : '▶';      // play state, not the source
@@ -132,7 +134,7 @@
 
     // visibility: pause/resume the poll and marquee
     onVisibility() {
-      if (document.visibilityState === 'visible') { if (Media.source && Media.last.state !== 'auth') Media.schedule(0); }
+      if (document.visibilityState === 'visible') { if (Media.source && Media.last.state !== 'auth') { Media.backoff = CFG.MEDIA_POLL_MS; Media.schedule(0); } }
       Media.render();
     },
 

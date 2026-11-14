@@ -37,11 +37,11 @@
       Spotify.refreshing = (async () => {
         const c = Spotify.creds;
         if (!c) throw { auth: true };
-        const res = await fetch(TOKEN, {
+        const res = await CH.fetchTimeout(TOKEN, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: c.refreshToken, client_id: c.clientId }).toString(),
-        });
+        }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
           if (res.status === 400 && (j.error === 'invalid_grant' || j.error === 'invalid_client')) {
@@ -64,8 +64,8 @@
     async poll() {
       try {
         let tok = await Spotify.token();
-        let res = await fetch(API + '?additional_types=track,episode', { headers: { Authorization: 'Bearer ' + tok } });
-        if (res.status === 401) { tok = await Spotify.refresh(); res = await fetch(API + '?additional_types=track,episode', { headers: { Authorization: 'Bearer ' + tok } }); }
+        let res = await CH.fetchTimeout(API + '?additional_types=track,episode', { headers: { Authorization: 'Bearer ' + tok } }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
+        if (res.status === 401) { tok = await Spotify.refresh(); res = await CH.fetchTimeout(API + '?additional_types=track,episode', { headers: { Authorization: 'Bearer ' + tok } }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS); }
         if (res.status === 204) return { state: 'idle' };
         if (res.status === 429) { const ra = Number(res.headers.get('Retry-After')); return { state: 'ratelimit', retryAfterMs: (ra > 0 ? ra : 10) * 1000 }; }
         if (!res.ok) { Spotify.lastError = 'HTTP ' + res.status; return { state: 'offline' }; }
@@ -78,14 +78,14 @@
         return { state: 'ok', playing: !!j.is_playing, title: item.name || '', artist };
       } catch (e) {
         if (e && e.auth) return { state: 'auth' };
-        Spotify.lastError = (e && e.message) || 'error';
+        Spotify.lastError = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'error';
         return { state: 'offline' };
       }
     },
 
     async cmd(method, path) {
       const tok = await Spotify.token();
-      const res = await fetch(API + '/' + path, { method, headers: { Authorization: 'Bearer ' + tok } });
+      const res = await CH.fetchTimeout(API + '/' + path, { method, headers: { Authorization: 'Bearer ' + tok } }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
       if (res.status === 403) {
         const j = await res.json().catch(() => null);
         throw { code: 403, reason: (j && j.error && j.error.reason) || '' };

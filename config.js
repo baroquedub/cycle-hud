@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.5.0',
+  VERSION: '0.5.1',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -49,6 +49,20 @@ window.CH.CONFIG = {
   HEAD_FAST_DPS: 90,         // compass turning faster than this is a head movement, not the bike
   COMPASS_STEADY_DPS: 15,    // the bias is only learned while the compass turns slower than this
   COMPASS_BIAS_GAIN: 0.03,   // per draw step (~10 Hz)
+  // Inverted compass: if the course (from the position track alone) has been
+  // updated since the compass diverged and still disagrees by more than
+  // COMPASS_FLIP_DEG for COMPASS_FLIP_MS, the compass turns the wrong way:
+  // its sign is flipped and remembered.
+  COMPASS_FLIP_DEG: 120,
+  COMPASS_FLIP_MS: 1000,
+  COMPASS_FLIP_HOLD_MS: 6000,   // ...or, on a straight road, disagrees that much for this long with fixes arriving
+
+  // A fix older than this (display was off, or the dash view) means the map
+  // no longer shows where you are: it's drawn greyed out and pulsing until a
+  // new fix lands.
+  STALE_FIX_MS: 4000,
+
+  MEDIA_FETCH_TIMEOUT_MS: 10000,   // a request that never answers must not stall the player
 
   DEFAULT_UNITS: 'mph',     // 'mph' or 'kmh'
 

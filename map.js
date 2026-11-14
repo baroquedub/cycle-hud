@@ -46,11 +46,7 @@
       `way["highway"="footway"]["bicycle"~"^(yes|designated|permissive)$"];);out geom qt;`;
   }
 
-  function fetchTimeout(url, opts, ms) {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), ms);
-    return fetch(url, Object.assign({ signal: ctl.signal }, opts)).finally(() => clearTimeout(t));
-  }
+  const fetchTimeout = CH.fetchTimeout;
 
   // ------------------------------------------------------------------ tile maths
   function tileOf(lat, lon) {
@@ -381,6 +377,7 @@
     frames: 0,
     lastFrameMs: 0,
     riderXY: [300, 320],   // recomputed from the canvas size on every draw
+    stale: false,          // last fix too old: drawn dim until a new one lands
 
     init(canvas) { MapView.canvas = canvas; },
     setFix(fix) { MapView.fix = fix; MapView.requestDraw(); },
@@ -425,6 +422,12 @@
 
       const fix = MapView.fix;
       const settled = CH.Motion.step(now);
+      // Out-of-date position (display was off, or the dash view was up): the
+      // tiles are where you were, not where you are. Dim and pulse until a
+      // fresh fix lands.
+      const stale = !fix || now - fix.t > CFG.STALE_FIX_MS;
+      MapView.stale = stale;
+      if (stale) ctx.globalAlpha = 0.28 + 0.1 * Math.sin(now / 350);
       const north = CH.Motion.mode === 'north';
       const heading = CH.Motion.displayed;           // fused, smoothed; null until known
       const hdg = north ? null : heading;             // map rotation
@@ -543,9 +546,10 @@
         ctx.fillText(pick[1], 26, y - 6);
       }
 
+      ctx.globalAlpha = 1;
       MapView.frames++;
       MapView.lastFrameMs = performance.now() - t0;
-      if (!settled) MapView.requestDraw();
+      if (!settled || stale) MapView.requestDraw();
     },
   };
   CH.MapView = MapView;

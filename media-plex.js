@@ -52,7 +52,7 @@
     async poll() {
       if (!Plex.creds) return { state: 'auth' };
       try {
-        const res = await fetch(Plex.url('/status/sessions'), { headers: { Accept: 'application/json' } });
+        const res = await CH.fetchTimeout(Plex.url('/status/sessions'), { headers: { Accept: 'application/json' } }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
         if (res.status === 401) { Plex.lastError = 'token rejected'; return { state: 'auth' }; }
         if (!res.ok) { Plex.lastError = 'HTTP ' + res.status; return { state: 'offline' }; }
         const j = await res.json();
@@ -68,7 +68,7 @@
           artist: t.grandparentTitle || t.originalTitle || '',
         };
       } catch (e) {
-        Plex.lastError = (e && e.message) || 'error';   // a TypeError here usually means CORS/unreachable
+        Plex.lastError = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'error';   // a TypeError here usually means CORS/unreachable
         return { state: 'offline' };
       }
     },
@@ -79,7 +79,7 @@
     // the track, so a 404 on a command means "look the player up again".
     async refreshPlayer() {
       try {
-        const res = await fetch(Plex.url('/clients'), { headers: { Accept: 'application/json' } });
+        const res = await CH.fetchTimeout(Plex.url('/clients'), { headers: { Accept: 'application/json' } }, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
         if (!res.ok) { Plex.lastControl = 'clients HTTP ' + res.status; return false; }
         const j = await res.json();
         const list = ((j && j.MediaContainer && j.MediaContainer.Server) || [])
@@ -94,12 +94,12 @@
 
     send(name) {
       Plex.cmdId++;
-      return fetch(Plex.url('/player/playback/' + name, {
+      return CH.fetchTimeout(Plex.url('/player/playback/' + name, {
         type: 'music',
         commandID: String(Plex.cmdId),
         'X-Plex-Target-Client-Identifier': Plex.player,
         'X-Plex-Client-Identifier': Plex.clientId,
-      }));
+      }), {}, CH.CONFIG.MEDIA_FETCH_TIMEOUT_MS);
     },
 
     async cmd(name) {
