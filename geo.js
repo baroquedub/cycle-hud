@@ -306,28 +306,32 @@
 
   // ------------------------------------------------------------------ motion fusion
   // Speed: GPS speed when the phone gives one, else distance/time between
-  // fixes, smoothed. Course: from the fixes (GPS heading, or our own movement),
-  // snapped to the road, held while stopped. Heading: the course fused with
-  // the glasses' compass for a real-time swing (see fuse()).
+  // fixes, smoothed. Course: the direction the bike moves (GPS heading, or the
+  // bearing of the track), snapped to the road, held while stopped. Heading:
+  // the course, fine-tuned between fixes by the glasses' compass (see fuse()).
   const Motion = {
     mode: 'auto',          // 'auto' (facing up: map rotates) | 'north' (arrow rotates)
     speed: 0,              // m/s, smoothed
     speedAt: 0,
     slowCount: 0,
     prev: null,            // previous fix used for derived speed
-    course: null,          // target course (deg) or null before the first one
-    courseSrc: 'none',     // 'road' | 'gps' | 'derived' | 'held' | 'compass' | 'none'
-    anchor: null,          // fix the derived course is measured from
-    derived: null,         // { v: bearing, t } from our own movement
+    hist: [],              // recent fixes, for the track bearing
+    derived: null,         // { v: bearing, t } of the track
+    course: null,          // heading of the track, snapped to the road (deg) or null
+    courseSrc: 'none',     // 'road' | 'gps' | 'derived' | 'held' | 'none'
+    courseAt: 0,
     roadLookup: null,      // (lat, lon, radius, heading) => { bearing, dist } — set by app.js
     road: null,            // last road snap result
     state: 'NONE',         // NONE | MOVING | HELD
+    // compass: sign*compass + offset ~ course. sign is learned from turns
+    // (votes), offset re-learned at fixes while the compass is steady.
+    sign: 1,
+    votes: 0,              // +3..-3, persisted; the compass is used once |votes| >= COMPASS_MIN_VOTES
+    turnRef: null,         // { course, cmp } at the last course sample, to vote on the next turn
+    cmpOffset: null,
+    cmpOffsetAt: 0,
+    relearn: false,        // the track turned while the head was still swinging: anchor again when it settles
     heading: null,         // fused real-time heading (deg) or null
-    bias: 0,               // learned compass offset (deg): sign*compass + bias ~ course
-    sign: 1,               // -1 when the compass turns the wrong way round (learned, remembered)
-    flips: 0,
-    courseAt: 0,           // when the course last changed by more than a few degrees
-    divergedSince: 0,
     displayed: null,       // smoothed heading used for the rotation
     lastStep: 0,
 
@@ -347,80 +351,103 @@
         if (raw < 0.5) { if (++Motion.slowCount >= 2) Motion.speed = 0; } else Motion.slowCount = 0;
         Motion.speedAt = f.t;
       }
-      // --- course
-      // GPS course when the fix carries one; otherwise the bearing of our own
-      // movement since an anchor fix (the glasses' phone-relayed fixes can
-      // arrive without a heading field). The anchor advances once we've moved
-      // further than the position noise.
+      // --- track bearing
+      // GPS course when the fix carries one; otherwise the bearing from the
+      // newest earlier fix that is at least `need` metres behind us (a baseline
+      // comfortably longer than the position noise), so it swings within a
+      // few metres of a turn.
+      Motion.hist.push(f);
+      while (Motion.hist.length && f.t - Motion.hist[0].t > 20000) Motion.hist.shift();
       let heading = null, src = 'gps';
-      if (finite(f.heading) && f.heading >= 0 && f.accuracy < 50) { heading = f.heading; Motion.anchor = f; }
+      if (finite(f.heading) && f.heading >= 0 && f.accuracy < 50) heading = f.heading;
       else {
-        const a = Motion.anchor;
-        if (!a || !finite(f.accuracy) || !finite(a.accuracy)) Motion.anchor = f;
-        else {
-          const moved = haversine([a.lat, a.lon], [f.lat, f.lon]);
-          const need = Math.max(8, Math.min(40, 0.6 * Math.max(f.accuracy, a.accuracy)));
-          if (moved >= need && f.accuracy < 100) { Motion.derived = { v: bearing([a.lat, a.lon], [f.lat, f.lon]), t: f.t }; Motion.anchor = f; }
-          else if (f.t - a.t > 20000) Motion.anchor = f;
+        const acc = finite(f.accuracy) ? f.accuracy : 20;
+        const need = Math.max(10, Math.min(60, 1.2 * acc));
+        if (acc < 100) {
+          for (let i = Motion.hist.length - 2; i >= 0; i--) {
+            const h = Motion.hist[i];
+            if (!finite(h.accuracy) || h.accuracy >= 100) continue;
+            if (haversine([h.lat, h.lon], [f.lat, f.lon]) >= need) { Motion.derived = { v: bearing([h.lat, h.lon], [f.lat, f.lon]), t: f.t }; break; }
+          }
         }
         if (Motion.derived && f.t - Motion.derived.t < 10000) { heading = Motion.derived.v; src = 'derived'; }
       }
       const hasHeading = heading != null;
-      const before = Motion.course;
       if (Motion.state === 'MOVING') {
         if (Motion.speed < 1.0 || !hasHeading) { Motion.state = 'HELD'; Motion.courseSrc = Motion.course == null ? 'none' : 'held'; }
       } else if (Motion.speed >= 1.5 && hasHeading) {
         Motion.state = 'MOVING';
       }
+      const before = Motion.course;
       if (Motion.state === 'MOVING') {
         Motion.course = heading; Motion.courseSrc = src;
-        // Snap to the road you're on: the arrow lines up with the street and the
-        // map swings as soon as a fix lands on the new road after a turn.
+        // Snap to the road you're on: exact alignment with the street. Oriented
+        // by the track, never the compass, so the course stays ground truth.
         if (Motion.roadLookup) {
           const radius = Math.max(CFG.SNAP_RADIUS_M, Math.min(60, (finite(f.accuracy) ? f.accuracy : 0) * 1.5));
-          const r = Motion.roadLookup(f.lat, f.lon, radius, heading);   // oriented by the position track, never the compass
+          const r = Motion.roadLookup(f.lat, f.lon, radius, heading);
           Motion.road = r;
           if (r) { Motion.course = r.bearing; Motion.courseSrc = 'road'; }
         }
+        Motion.learnCompass(f, before);
       } else Motion.road = null;
       if (Motion.course != null && (before == null || Math.abs(angleDiff(before, Motion.course)) > 10)) Motion.courseAt = f.t;
+    },
+
+    // What the compass is worth, judged against the track at each fix.
+    learnCompass(f, before) {
+      const c = Compass.fresh();
+      // Sign vote: when the track has turned by more than 30 deg since the last
+      // sample, did the compass turn the same way?
+      if (!Motion.turnRef) Motion.turnRef = { course: Motion.course, cmp: c };
+      else {
+        const dC = angleDiff(Motion.turnRef.course, Motion.course);
+        if (Math.abs(dC) > 30) {
+          if (c != null && Motion.turnRef.cmp != null) {
+            const dM = angleDiff(Motion.turnRef.cmp, c);
+            // a vote needs a clear compass swing of a size comparable to the track's
+            if (Math.abs(dM) > 20 && Math.abs(dM) < 3 * Math.abs(dC) && Math.abs(dC) < 3 * Math.abs(dM)) {
+              const v = (dC > 0) === (dM > 0) ? 1 : -1;
+              Motion.votes = Math.max(-3, Math.min(3, Motion.votes + v));
+              const sign = Motion.votes >= 0 ? 1 : -1;
+              if (sign !== Motion.sign) { Motion.sign = sign; Motion.cmpOffset = null; }
+              if (CH.store) CH.store.set('compassVotes', Motion.votes);
+            }
+          }
+          Motion.turnRef = { course: Motion.course, cmp: c };
+        }
+      }
+      // Offset: re-anchor the compass to the track whenever the compass is
+      // steady and either roughly agrees already, the track has turned (the
+      // track is truth; if the head is still swinging, do it at the next
+      // steady fix), or the anchor is getting old.
+      const turned = before != null && Math.abs(angleDiff(before, Motion.course)) > 20;
+      if (turned) Motion.relearn = true;
+      if (c != null && Math.abs(Compass.rate) < 40) {
+        const h = Motion.cmpOffset == null ? null : (Motion.sign * c + Motion.cmpOffset + 720) % 360;
+        if (h == null || Motion.relearn || Math.abs(angleDiff(Motion.course, h)) <= CFG.HEAD_TUNE_DEG || f.t - Motion.cmpOffsetAt > CFG.HEAD_ANCHOR_MS) {
+          Motion.cmpOffset = angleDiff(0, Motion.course - Motion.sign * c);
+          Motion.cmpOffsetAt = f.t;
+          Motion.relearn = false;
+        }
+      }
     },
 
     // Course used to centre the next map box ahead of you (null when unknown).
     lookahead() { return Motion.course; },
 
-    // Real-time heading: the compass (instant, but it follows the head and
-    // carries a bias) corrected by the road-snapped course (slow, true).
+    // Real-time heading. The track (course) is the heading; the compass only
+    // fine-tunes it within HEAD_TUNE_DEG, only between fixes whose anchor is
+    // fresh, and only once it has proved it turns the same way as the bike.
+    // Anything further off is the head, not the bike, and is ignored.
     fuse(now) {
       const ref = Motion.course, c = Compass.fresh();
-      if (c == null) return ref;
-      const corrected = () => (Motion.sign * c + Motion.bias + 720) % 360;
-      const cand = corrected();
-      if (ref == null) return cand;                       // not moved yet: the head is all we have
-      if (Motion.state !== 'MOVING') return ref;          // stopped: hold, don't swing with the head
-      const fast = Math.abs(Compass.rate) > CFG.HEAD_FAST_DPS;   // the head whipping round, not the bike
-      const d = angleDiff(cand, ref);
-      if (Math.abs(d) <= CFG.HEAD_GLANCE_DEG) {
-        Motion.divergedSince = 0;
-        if (fast) return ref;
-        if (Math.abs(Compass.rate) < CFG.COMPASS_STEADY_DPS) Motion.bias = angleDiff(0, Motion.bias + CFG.COMPASS_BIAS_GAIN * d);
-        return corrected();
-      }
-      if (fast) { Motion.divergedSince = now; return ref; }   // restart the glance window while it's still moving
-      if (!Motion.divergedSince) Motion.divergedSince = now;
-      // Inverted compass: the course comes from the position track alone, so if
-      // it has been updated since we diverged and still points the other way,
-      // the compass turns the wrong way round. Flip it and re-zero the bias.
-      const turned = Motion.courseAt > Motion.divergedSince && now - Motion.courseAt > CFG.COMPASS_FLIP_MS;      // the track turned, compass went the other way
-      const straight = now - Motion.divergedSince > CFG.COMPASS_FLIP_HOLD_MS && now - Motion.speedAt < 3000;     // or it just keeps disagreeing while fixes arrive
-      if (Math.abs(d) > CFG.COMPASS_FLIP_DEG && Motion.speed >= 2 && (turned || straight)) {
-        Motion.sign = -Motion.sign; Motion.flips++;
-        Motion.bias = angleDiff(0, ref - Motion.sign * c);
-        Motion.divergedSince = 0;
-        if (CH.store) CH.store.set('compassSign', Motion.sign);
-        return corrected();
-      }
-      return now - Motion.divergedSince < CFG.HEAD_GLANCE_MS ? ref : cand;   // glance: hold; turn: follow
+      const usable = c != null && Math.abs(Motion.votes) >= CFG.COMPASS_MIN_VOTES;
+      if (ref == null) return usable ? (Motion.sign * c + 360) % 360 : null;      // not moved yet: the head, if we trust it
+      if (Motion.state !== 'MOVING' || !usable || Motion.cmpOffset == null || Motion.relearn || now - Motion.cmpOffsetAt > CFG.HEAD_ANCHOR_MS) return ref;
+      if (Math.abs(Compass.rate) > CFG.HEAD_FAST_DPS) return ref;             // head whipping round
+      const h = (Motion.sign * c + Motion.cmpOffset + 720) % 360;
+      return Math.abs(angleDiff(ref, h)) <= CFG.HEAD_TUNE_DEG ? h : ref;
     },
 
     // Advance the smoothed heading (map rotation in Facing up, arrow in North

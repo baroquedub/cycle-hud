@@ -316,8 +316,7 @@
     if (el.hidden) return;
     const f = Loc.last;
     const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
-    const b = Math.round(Motion.bias);
-    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + (Motion.sign < 0 ? ' inv' : '') + ' b' + (b >= 0 ? '+' : '') + b + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
+    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + ' v' + (Motion.votes >= 0 ? '+' : '') + Motion.votes + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
     const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's' + (f.ts ? '/' + Math.max(0, Math.round((Date.now() - f.ts) / 1000)) + 's' : '') + ' ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
       : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
@@ -406,7 +405,7 @@
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
-      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · bias ' + Math.round(Motion.bias) + '°' + (Motion.sign < 0 ? ' · inverted' : '') + ' · flips ' + Motion.flips],
+      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · votes ' + Motion.votes + (Motion.sign < 0 ? ' (turns the wrong way)' : '') + (Math.abs(Motion.votes) >= CFG.COMPASS_MIN_VOTES ? ' · in use' : ' · not trusted yet')],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
@@ -444,7 +443,9 @@
     MapView.init($('map'));
     MapView.zoom = settings.zoom;
     Motion.mode = settings.mapMode;
-    Motion.sign = store.get('compassSign', 1) === -1 ? -1 : 1;
+    Motion.votes = Math.max(-3, Math.min(3, Number(store.get('compassVotes', 0)) || 0));
+    Motion.sign = Motion.votes >= 0 ? 1 : -1;
+    store.set('compassSign', null);   // superseded by the votes
     Motion.roadLookup = MapData.nearestRoad;
     // The compass is always part of the heading. Try straight away (attaches
     // directly where no permission API exists); where a prompt needs a user

@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.5.3',
+  VERSION: '0.6.0',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -38,24 +38,20 @@ window.CH.CONFIG = {
   // SNAP_RADIUS_M (widened when the fix is poor) whose direction is within
   // SNAP_MAX_DEG of the way you're moving; crossing streets are ignored.
   SNAP_RADIUS_M: 30,
-  SNAP_MAX_DEG: 60,
+  SNAP_MAX_DEG: 45,
 
-  // Heading fusion: the glasses' compass gives the instant heading, the
-  // road-snapped course corrects its bias. A compass reading more than
-  // HEAD_GLANCE_DEG off the course is treated as a look over the shoulder and
-  // ignored for HEAD_GLANCE_MS; longer than that it's a real turn.
-  HEAD_GLANCE_DEG: 60,
-  HEAD_GLANCE_MS: 2000,
-  HEAD_FAST_DPS: 90,         // compass turning faster than this is a head movement, not the bike
-  COMPASS_STEADY_DPS: 15,    // the bias is only learned while the compass turns slower than this
-  COMPASS_BIAS_GAIN: 0.03,   // per draw step (~10 Hz)
-  // Inverted compass: if the course (from the position track alone) has been
-  // updated since the compass diverged and still disagrees by more than
-  // COMPASS_FLIP_DEG for COMPASS_FLIP_MS, the compass turns the wrong way:
-  // its sign is flipped and remembered.
-  COMPASS_FLIP_DEG: 120,
-  COMPASS_FLIP_MS: 1000,
-  COMPASS_FLIP_HOLD_MS: 6000,   // ...or, on a straight road, disagrees that much for this long with fixes arriving
+  // Heading. The direction the bike actually moves (the track between fixes,
+  // snapped to the road) is the heading. The glasses' compass sits on your
+  // head, so it only fine-tunes between fixes, within HEAD_TUNE_DEG of the
+  // track, and is re-anchored to the track at every fix; anything further off
+  // (a look over the shoulder) is ignored, as is a swing faster than
+  // HEAD_FAST_DPS. The compass is only used at all once it has agreed with
+  // the track's turning direction COMPASS_MIN_VOTES times (it may turn the
+  // wrong way round), and never when its anchor is older than HEAD_ANCHOR_MS.
+  HEAD_TUNE_DEG: 30,
+  HEAD_FAST_DPS: 90,
+  HEAD_ANCHOR_MS: 10000,
+  COMPASS_MIN_VOTES: 2,
 
   // A fix older than this is suspect when we were moving at the time, or when
   // the map has just come back after being away for AWAY_MS (display off, dash
