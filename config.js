@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.7.2',
+  VERSION: '0.7.3',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -92,7 +92,7 @@ window.CH.CONFIG = {
   COMPASS_CAL_MIN_CONC: 0.85,
   HEAD_STEADY_MS: 1500,
   HEAD_TURN_DEG: 70,
-  HEAD_HOLD_MS: 4000,
+  HEAD_HOLD_MS: 3000,
   HEAD_SPREAD_DEG: 30,
 
   // Self-check: in Facing up the track must point up the screen. When the

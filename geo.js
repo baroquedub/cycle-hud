@@ -328,7 +328,7 @@
       if (!r) { Replay.done = true; Replay.timer = null; Loc.setStatus('ok', 'Replay finished'); return; }
       const due = Replay.start0 + (r[0] - Replay.t0) / Replay.rate;   // real time
       Replay.timer = setTimeout(() => {
-        if (finite(r[7])) Compass.onEvent({ type: 'deviceorientationabsolute', absolute: true, alpha: (360 - r[7]) % 360 });   // the logged compass reading
+        if (finite(r[7])) Compass.feed(r[7]);          // the logged compass reading (already smoothed on the glasses)
         Loc.inject({
           lat: r[2], lon: r[3], accuracy: finite(r[4]) ? r[4] : 20,
           heading: finite(r[5]) ? r[5] : null, speed: finite(r[6]) ? r[6] : null,
@@ -391,6 +391,14 @@
       Compass.at = now;
       if (Compass.onChange) Compass.onChange();
     },
+    // A reading supplied by a replay: taken as is, only the turning rate is derived.
+    feed(h) {
+      const now = CH.clock();
+      if (Compass.raw != null && now - Compass.rawAt > 20 && now - Compass.rawAt < 3000) Compass.rate = angleDiff(Compass.raw, h) / ((now - Compass.rawAt) / 1000);
+      else Compass.rate = 0;
+      if (Math.abs(Compass.rate) > 25) Compass.movedAt = now;
+      Compass.raw = h; Compass.rawAt = now; Compass.value = h; Compass.at = now;
+    },
     fresh() { return Compass.value != null && CH.clock() - Compass.at < 2500 ? Compass.value : null; },
     steady() { return Compass.fresh() != null && CH.clock() - Compass.movedAt > CFG.HEAD_STEADY_MS; },
     onChange: null,
@@ -429,11 +437,11 @@
     base: 0,               // baseline used (m)
     jitter: 0,             // median scatter of the fixes about a smooth path (m)
     pendingRaw: null,      // first bearing after a standstill, awaiting agreement
+    pendingSrc: '',        // ...and where it came from
     moving: false,
     course: null,          // the heading: track bearing refined to the road (deg) or null
     courseSrc: 'none',     // 'road' | 'track' | 'gps' | 'held' | 'none'
     courseAt: 0,
-    recentCourses: [],     // last three headings, for a steady value to hold when stopping
     road: null,            // { bearing, dist, cls, off } of the road giving the heading, or null
     roadLookup: null,      // (lat, lon, radius) => [{ axis, dist, cls }] — set by app.js
     speed: 0,              // m/s, smoothed
@@ -498,7 +506,7 @@
       }
       Motion.restNow = !accepted || flag === 'rep';
       if (accepted) Motion.update(f, gpsSpeed);
-      if (Motion.restNow) Motion.atRest(f); else Motion.headWin = [];
+      if (Motion.restNow || !Motion.moving) Motion.atRest(f); else Motion.headWin = [];   // the rest rules run until movement is confirmed
       Motion.record(f, flag);
     },
 
@@ -510,7 +518,7 @@
 
     setCourse(h, src, t) {
       Motion.course = Motion.heading = h; Motion.courseSrc = src; Motion.courseAt = t;
-      Motion.road = null; Motion.recentCourses = [];
+      Motion.road = null;
       if (Motion.onChange) Motion.onChange();
     },
 
@@ -585,7 +593,7 @@
 
     resetTrack() { Motion.pts = []; Motion.lastPos = null; Motion.quarantine = null; Motion.raw = null; Motion.pendingRaw = null; if (Motion.moving) Motion.hold(); },
 
-    hold() { Motion.moving = false; Motion.pendingRaw = null; Motion.road = null; Motion.recentCourses = []; Motion.courseSrc = Motion.course == null ? 'none' : 'held'; },
+    hold() { Motion.moving = false; Motion.pendingRaw = null; Motion.road = null; Motion.courseSrc = Motion.course == null ? 'none' : 'held'; },
 
     // Add a fix to the track unless it implies an impossible jump. Returns true when accepted.
     accept(f, time, acc) {
@@ -652,15 +660,9 @@
         // The first fixes of a stop still complete the track to the stopping
         // point (stopping just after a corner would otherwise freeze the map
         // mid-swing); after that the position only jitters, so the heading is
-        // left alone: the steadiest of the last three is kept.
+        // left alone and leaving the stop needs two agreeing bearings again.
         if (++Motion.stillRun > CFG.TRACK_STILL_FIXES) {
-          if (Motion.moving && Motion.recentCourses.length === 3) {
-            const r = Motion.recentCourses, cost = (i) => r.reduce((acc, v) => acc + Math.abs(angleDiff(r[i], v)), 0);
-            let best = 0; for (let i = 1; i < 3; i++) if (cost(i) < cost(best)) best = i;
-            Motion.course = Motion.heading = r[best];
-            Motion.recentCourses = [];
-          }
-          if (Motion.moving && p.time - Motion.rawAt > CFG.TRACK_WINDOW_MS) Motion.hold();
+          if (Motion.moving) Motion.hold();
           return;
         }
       } else Motion.stillRun = 0;
@@ -677,7 +679,7 @@
       // the usual jitter, 7 deg at 12 m) once the phone's speed says we're
       // moving. Without a speed field the normal baseline applies.
       const sp = Motion.stopPt;
-      if (sp && !Motion.departDone) {
+      if (sp && !Motion.departDone && !Motion.moving) {        // only after a settled stop (a slowdown's anchor is a single noisy fix)
         const d = Math.hypot(p.x - sp.x, p.y - sp.y);
         if (d >= base) Motion.departDone = true;
         if (d >= CFG.TRACK_DEPART_M && gpsSpeed != null && gpsSpeed >= CFG.TRACK_DEPART_MPS) {
@@ -705,10 +707,11 @@
         return;
       }
       if (!Motion.moving) {
-        // from rest, two bearings in a row must agree before the map turns, unless
-        // the phone's own speed already says we're clearly moving
-        const sure = src === 'depart' || (gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS);
-        if (!sure && (Motion.pendingRaw == null || Math.abs(angleDiff(Motion.pendingRaw, raw)) > CFG.TRACK_START_DEG)) { Motion.pendingRaw = raw; return; }
+        // from rest, two bearings in a row must agree before the map turns: the
+        // first metres of a departure can be a sideways push-off (a ride log
+        // showed a 4 m chord 90 deg off the way the bike then went)
+        // (both bearings of the same kind: a creeping stop's approach chord must not vouch for a departure chord)
+        if (Motion.pendingRaw == null || Motion.pendingSrc !== src || Math.abs(angleDiff(Motion.pendingRaw, raw)) > CFG.TRACK_START_DEG) { Motion.pendingRaw = raw; Motion.pendingSrc = src; return; }
         Motion.pendingRaw = null; Motion.moving = true;
       }
       Motion.raw = raw; Motion.rawAt = p.time; Motion.rawSrc = src;
@@ -733,7 +736,6 @@
         if (road) { course = road.bearing; csrc = 'road'; }
       }
       Motion.course = Motion.heading = course; Motion.courseSrc = csrc; Motion.road = road;
-      Motion.recentCourses.push(course); if (Motion.recentCourses.length > 3) Motion.recentCourses.shift();
       if (before == null || Math.abs(angleDiff(before, course)) > 10) Motion.courseAt = f.t;
 
       // --- self-check: the track must point up the drawn map. Two fixes running with it
@@ -777,11 +779,11 @@
     },
 
     // --- ride log: every fix and what the heading made of it
-    LOG_COLS: ['t', 'ts', 'lat', 'lon', 'acc', 'heading', 'speed', 'compass', 'track', 'course', 'map', 'flag', 'true', 'src'],
+    LOG_COLS: ['t', 'ts', 'lat', 'lon', 'acc', 'heading', 'speed', 'compass', 'track', 'course', 'map', 'flag', 'true', 'src', 'moving'],
     record(f, flag) {
       const r = (v, d) => finite(v) ? Number(v.toFixed(d)) : null;
       Motion.log.push([f.t, finite(f.ts) ? f.ts : null, r(f.lat, 6), r(f.lon, 6), r(f.accuracy, 0), r(f.heading, 0), r(f.speed, 1),
-        r(Compass.fresh(), 0), r(Motion.raw, 0), r(Motion.course, 0), r(Motion.displayed, 0), flag, r(f._true, 0), Motion.courseSrc]);
+        r(Compass.fresh(), 0), r(Motion.raw, 0), r(Motion.course, 0), r(Motion.displayed, 0), flag, r(f._true, 0), Motion.courseSrc, Motion.moving ? 1 : 0]);
       if (Motion.log.length > CFG.LOG_MAX) Motion.log.splice(0, Motion.log.length - CFG.LOG_MAX);
       Motion.logDirty = true;
       if (f.t - Motion.logSavedAt > 10000) Motion.saveLog();
