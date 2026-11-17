@@ -58,7 +58,7 @@
     const h = d.getHours(), m = d.getMinutes();
     return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
   }
-  const ago = (t) => !t ? 'never' : Math.round((Date.now() - t) / 1000) + ' s ago';
+  const ago = (t) => !t ? 'never' : Math.round((CH.clock() - t) / 1000) + ' s ago';
 
   // ------------------------------------------------------------------ screens + history
   let current = 'map';
@@ -99,9 +99,9 @@
   // place focus a few times over the first second — and stop the moment the
   // user presses anything.
   let lastKeyAt = 0;
-  document.addEventListener('keydown', () => { lastKeyAt = Date.now(); }, true);
+  document.addEventListener('keydown', () => { lastKeyAt = CH.clock(); }, true);
   function holdFocus(screen, getEl) {
-    const since = Date.now();
+    const since = CH.clock();
     const put = () => {
       if (current !== screen || lastKeyAt > since) return;
       const el = getEl();
@@ -305,7 +305,7 @@
   function updateGpsPill() {
     const el = $('gps-pill');
     const f = Loc.last;
-    const age = f ? Date.now() - f.t : Infinity;
+    const age = f ? CH.clock() - f.t : Infinity;
     let msg = '';
     if (Loc.status.state === 'denied') msg = 'Location blocked';
     else if (!f || age > 30000) msg = 'Waiting for GPS';
@@ -321,7 +321,7 @@
     if (MapData.status === 'loading') msg = 'Loading map…';
     else if (MapData.status === 'error') msg = 'Map data unavailable';
     else if (MapData.status === 'idle' && Loc.last) msg = 'Loading map…';
-    else if (settings.view === 'map' && MapView.isStale(Date.now())) msg = 'Map out of date…';
+    else if (settings.view === 'map' && MapView.isStale(CH.clock())) msg = 'Map out of date…';
     if (settings.view === 'dash') msg = '';   // map notices mean nothing without the map
     el.hidden = !msg;
     if (msg) el.textContent = msg;
@@ -338,7 +338,7 @@
     // line 2: mode, fix age + accuracy, how often positions change + share of repeated fixes, compass (reference only)
     const D = Motion.diag, iv = Motion.median(Motion.intervals);
     const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · trk ' + dg(Motion.raw) + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '') + (D.sideways ? ' · sw' + D.sideways : '');
-    const l2 = f ? (settings.mapMode === 'north' ? 'N-up' : 'Up') + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · ' + (iv == null ? '–' : (iv / 1000).toFixed(1) + 's') + ' ' + (D.fixes ? Math.round(100 * D.repeats / D.fixes) : 0) + '%rep · cmp ' + dg(Compass.fresh())
+    const l2 = f ? (settings.mapMode === 'north' ? 'N-up' : 'Up') + ' · fix ' + Math.round((CH.clock() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · ' + (iv == null ? '–' : (iv / 1000).toFixed(1) + 's') + ' ' + (D.fixes ? Math.round(100 * D.repeats / D.fixes) : 0) + '%rep · cmp ' + (Motion.headHeading() != null ? dg(Motion.headHeading()) + '*' : dg(Compass.fresh()))
       : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
   }
@@ -348,7 +348,7 @@
     if (document.visibilityState === 'hidden' || current !== 'map') return;
     updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
-    if (MapView.enabled && !MapView.stale && MapView.isStale(Date.now())) MapView.requestDraw();
+    if (MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
   }, 1000);
 
   // ------------------------------------------------------------------ location → everything
@@ -376,7 +376,7 @@
   function renderRelayDot() {
     const el = $('pair-status');
     if (!el) return;
-    const recent = Relay.lastDeliveredAt && Date.now() - Relay.lastDeliveredAt < 180000;
+    const recent = Relay.lastDeliveredAt && CH.clock() - Relay.lastDeliveredAt < 180000;
     el.classList.toggle('on', Relay.connected || recent);
     el.classList.toggle('paired', recent);
     $('pair-status-text').textContent = recent ? (pairMsg || 'Phone paired ✓') + ' · ' + ago(Relay.lastDeliveredAt)
@@ -425,7 +425,8 @@
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Heading', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · from ' + Motion.courseSrc + (Motion.road ? ' (' + Math.round(Motion.road.dist) + ' m away)' : '') + ' · ' + (Motion.moving ? 'moving' : 'held')],
-      ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m' + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' (not used)'],
+      ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m'],
+      ['Compass', Motion.calText() + ' · orients the map before the first movement only'],
       ['Fix stream', Motion.diagText()],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
@@ -456,7 +457,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { keepAwake(); if (MapView.enabled) MapView.resume(); }   // geo.js restarts the location watch itself
-    else { MapView.stop(); Motion.saveLog(); }
+    else { MapView.stop(); Motion.saveLog(); Motion.saveCal(); }
   });
 
   // ------------------------------------------------------------------ boot
@@ -467,6 +468,7 @@
     store.set('compassVotes', null); store.set('compassSign', null);   // the compass no longer steers the map
     Motion.roadLookup = MapData.roadCandidates;
     Motion.loadLog();
+    Motion.loadCal();
     // The compass is read for the debug readout and the ride log only. Try
     // straight away (attaches directly where no permission API exists); where a
     // prompt needs a user gesture the first attempt fails, so ask again on the

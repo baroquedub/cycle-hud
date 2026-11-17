@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.7.0',
+  VERSION: '0.7.1',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -46,6 +46,7 @@ window.CH.CONFIG = {
   TRACK_BASE_K: 1.5,
   TRACK_JITTER_K: 8,         // ...or this many times the measured fix jitter (median scatter), whichever is longer
   TRACK_STILL_K: 3,          // progress over TRACK_SPEED_MS below this many times the jitter = standing still: heading held, speed 0
+  TRACK_STILL_FIXES: 2,      // the first fixes of a stop still finish the track to the stopping point; after that the heading is held
   TRACK_WINDOW_MS: 15000,    // covering the baseline took longer than this = standing still: hold the heading
   TRACK_WIGGLE: 2.5,         // path length / straight-line distance above this = jitter at a standstill, not travel
   TRACK_START_DEG: 45,       // from a standstill, two consecutive track bearings must agree this well before the map turns
@@ -54,7 +55,9 @@ window.CH.CONFIG = {
   TRACK_JUMP_MPS: 30,        // an implied speed above this is a position jump: only believed once the next fix agrees
   TRACK_REPEAT_STOP_MS: 4000, // the phone repeating the same position for this long = stopped (speed shows 0)
   TRACK_TS_SANE_MS: 600000,  // a fix timestamp further than this from the clock is nonsense: receipt time is used instead
-  TRACK_GPS_COURSE_MPS: 1.5, // a course field in the fix is trusted only at or above this speed (at rest it's noise or a stray 0 = north)
+  TRACK_GPS_COURSE_MPS: 1.5, // a heading field in the fix may refine the track only at or above this speed...
+  TRACK_GPS_AGREE_DEG: 45,   // ...and only when within this of the track (the glasses send heading 0 in every fix: never a source)
+  TRACK_STOP_MPS: 0.5,       // a speed field below this = stopped right now (the glasses' phone does send speed)
   TRACK_KEEP_MS: 60000,      // track history kept
 
   // Road refinement: among roads within SNAP_RADIUS_M (widened to 2 x the fix
@@ -62,12 +65,29 @@ window.CH.CONFIG = {
   // with the lowest score (distance + SNAP_DEG_M per degree off) gives the
   // heading. The road we were already on gets SNAP_STICK_M off its score
   // while its bearing is within SNAP_STICK_DEG, so junctions don't flicker.
-  // Roads crossing the track are never candidates.
+  // A cosmetic fine-tune only: the first real ride log showed the track itself
+  // within 2 deg (median) of the true direction, and a road further off than
+  // about 12 deg was more often the wrong road than a correction.
   SNAP_RADIUS_M: 30,
-  SNAP_MAX_DEG: 60,
+  SNAP_MAX_DEG: 12,
   SNAP_DEG_M: 0.25,
   SNAP_STICK_M: 8,
   SNAP_STICK_DEG: 25,
+
+  // Compass before the first movement. While moving, the glasses' compass is
+  // calibrated against the track (sign and offset learned with exponential
+  // decay, kept as ch.compassCal; on this device it is mirrored with a small
+  // offset). Once it has agreed on COMPASS_CAL_MIN_N samples with a fit of at
+  // least COMPASS_CAL_MIN_CONC (1 = perfect), the head direction orients the
+  // map when the app opens, until the first track heading: a head direction
+  // steady for HEAD_STEADY_MS and more than HEAD_DEADBAND_DEG from the shown
+  // one rotates the map. Never while moving, and not at stops mid-ride (the
+  // approach heading is where the bike points; the head looks at traffic).
+  COMPASS_CAL_DECAY: 0.995,
+  COMPASS_CAL_MIN_N: 60,
+  COMPASS_CAL_MIN_CONC: 0.85,
+  HEAD_STEADY_MS: 1500,
+  HEAD_DEADBAND_DEG: 25,
 
   // Self-check: in Facing up the track must point up the screen. When the
   // drawn rotation is further than this from the track for two fixes running,

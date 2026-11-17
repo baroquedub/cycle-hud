@@ -44,6 +44,11 @@
 
   CH.geo = { EARTH, rad, deg, finite, haversine, bearing, project, unproject, angleDiff, angleLerp };
 
+  // The app's clock for fixes, timers and ages. Real time normally; during a
+  // replay it runs in the ride's own time (at &rate= speed) so every timing
+  // rule behaves as it did on the road.
+  CH.clock = () => Date.now();
+
   // Shared fetch with a deadline: a request that never answers (the phone's
   // connection dropping while the display is off) must not hang a poll loop.
   CH.fetchTimeout = function (url, opts, ms) {
@@ -79,21 +84,21 @@
     norm(pos) {
       const c = pos.coords;
       // t = when we received it (what staleness keys on); ts = the position's own timestamp (what the track keys on)
-      return { lat: c.latitude, lon: c.longitude, accuracy: c.accuracy, heading: c.heading, speed: c.speed, t: Date.now(), ts: finite(pos.timestamp) ? pos.timestamp : null };
+      return { lat: c.latitude, lon: c.longitude, accuracy: c.accuracy, heading: c.heading, speed: c.speed, t: CH.clock(), ts: finite(pos.timestamp) ? pos.timestamp : null };
     },
 
     setStatus(state, msg, code = null) {
-      Loc.status = { state, msg, code, at: Date.now() };
+      Loc.status = { state, msg, code, at: CH.clock() };
       if (Loc.onStatus) Loc.onStatus(Loc.status);
     },
 
-    reallyBlocked() { return Loc.denies >= 4 && Date.now() - Loc.firstDenyAt > 20000; },
+    reallyBlocked() { return Loc.denies >= 4 && CH.clock() - Loc.firstDenyAt > 20000; },
 
     onFix(pos) {
       const c = pos && pos.coords;
       if (!c || !finite(c.latitude) || !finite(c.longitude)) return;
       Loc.last = Loc.norm(pos);
-      Loc.lastFixAt = Date.now();
+      Loc.lastFixAt = CH.clock();
       Loc.fixes++;
       Loc.fails = 0; Loc.denies = 0; Loc.firstDenyAt = 0;
       if (Loc.status.state !== 'ok') Loc.setStatus('ok', 'Location found');
@@ -103,8 +108,8 @@
 
     onError(err) {
       const code = err && err.code;
-      if (code === 1) { Loc.denies++; if (!Loc.firstDenyAt) Loc.firstDenyAt = Date.now(); }
-      Loc.lastErr = { code, msg: (err && err.message) || '', at: Date.now() };
+      if (code === 1) { Loc.denies++; if (!Loc.firstDenyAt) Loc.firstDenyAt = CH.clock(); }
+      Loc.lastErr = { code, msg: (err && err.message) || '', at: CH.clock() };
       if (!Loc.fresh(30000)) {
         if (code === 1 && Loc.reallyBlocked()) Loc.setStatus('denied', Loc.errorText(err), code);
         else Loc.setStatus('searching', 'Looking for your location…', code);
@@ -129,7 +134,7 @@
       Loc.clearWatch();
       Loc.restarts++;
       Loc.dead = false;
-      Loc.startedAt = Date.now();
+      Loc.startedAt = CH.clock();
       try { Loc.watchId = navigator.geolocation.watchPosition(Loc.onFix, Loc.onError, { enableHighAccuracy: true }); }
       catch (e) { Loc.onError({ code: 2, message: e.message }); return; }
       if (Loc.fails % 2 === 1) { try { navigator.geolocation.getCurrentPosition(Loc.onFix, () => {}, { timeout: 10000 }); } catch { /* ignore */ } }
@@ -144,7 +149,7 @@
 
     check() {
       if (document.visibilityState === 'hidden') { Loc.schedule(5000); return; }
-      const quietFor = Date.now() - Math.max(Loc.lastFixAt, Loc.startedAt);
+      const quietFor = CH.clock() - Math.max(Loc.lastFixAt, Loc.startedAt);
       const needRestart = !Loc.fresh(30000) && (Loc.dead || quietFor > 2500 || Loc.watchId == null);
       if (needRestart) { Loc.fails++; Loc.startWatch(); }
       else Loc.schedule();
@@ -186,7 +191,7 @@
       } catch { /* not supported */ }
     },
 
-    fresh(maxAge = 60000) { return Loc.last && Date.now() - Loc.last.t < maxAge ? Loc.last : null; },
+    fresh(maxAge = 60000) { return Loc.last && CH.clock() - Loc.last.t < maxAge ? Loc.last : null; },
 
     watch(cb) {
       Loc.listeners.add(cb);
@@ -197,7 +202,7 @@
 
     // Used by the simulators: hand a fix to the app as if the phone sent it.
     inject(fix) {
-      Loc.last = fix; Loc.lastFixAt = Date.now(); Loc.fixes++;
+      Loc.last = fix; Loc.lastFixAt = CH.clock(); Loc.fixes++;
       if (Loc.status.state !== 'ok') Loc.setStatus('ok', DEMO ? 'Demo location' : 'Replaying');
       Loc.listeners.forEach((cb) => cb(fix));
     },
@@ -260,7 +265,7 @@
       Sim.tick();
     },
     tick() {
-      const now = Date.now();
+      const now = CH.clock();
       Sim.n++;
       const lap = Math.floor(Sim.along / Sim.total);
       // pause for 6 s just after the 3rd corner, once per lap
@@ -300,7 +305,7 @@
   // pair.html) back through the app at &rate= times real time, so what the
   // glasses saw can be reproduced in a desktop browser or the harness.
   const Replay = {
-    fixes: [], i: 0, timer: null, t0: 0, start0: 0, rate: num('rate', 1), done: false,
+    fixes: [], i: 0, timer: null, t0: 0, start0: 0, shift: 0, rate: num('rate', 1), done: false,
     async start() {
       if (Replay.fixes.length || Replay.timer) return;
       try {
@@ -312,34 +317,39 @@
       } catch (e) { console.warn('replay', e); Loc.setStatus('error', 'Replay failed: ' + e.message); return; }
       if (!Replay.fixes.length) { Loc.setStatus('error', 'Replay: no fixes in the file'); return; }
       Replay.t0 = Replay.fixes[0][0]; Replay.start0 = Date.now();
+      // the app's clock carries on from now at `rate` x; the ride's times are shifted to match
+      Replay.shift = Replay.start0 - Replay.t0;
+      CH.clock = () => Replay.start0 + (Date.now() - Replay.start0) * Replay.rate;
       console.info('replay', Replay.fixes.length, 'fixes at', Replay.rate + 'x');
       Replay.next();
     },
     next() {
       const r = Replay.fixes[Replay.i];
       if (!r) { Replay.done = true; Replay.timer = null; Loc.setStatus('ok', 'Replay finished'); return; }
-      const due = Replay.start0 + (r[0] - Replay.t0) / Replay.rate;
+      const due = Replay.start0 + (r[0] - Replay.t0) / Replay.rate;   // real time
       Replay.timer = setTimeout(() => {
-        const now = Date.now();
+        if (finite(r[7])) Compass.onEvent({ type: 'deviceorientationabsolute', absolute: true, alpha: (360 - r[7]) % 360 });   // the logged compass reading
         Loc.inject({
           lat: r[2], lon: r[3], accuracy: finite(r[4]) ? r[4] : 20,
           heading: finite(r[5]) ? r[5] : null, speed: finite(r[6]) ? r[6] : null,
-          t: now, ts: finite(r[1]) ? r[1] + (Replay.start0 - Replay.t0) : null, _true: finite(r[12]) ? r[12] : null,
+          t: r[0] + Replay.shift, ts: finite(r[1]) ? r[1] + Replay.shift : null, _true: finite(r[12]) ? r[12] : null,
         });
         Replay.i++;
         Replay.next();
-      }, Math.max(0, due - Date.now()));
+      }, Math.max(0, due - Date.now()));   // real time   // real time
     },
   };
   CH.Replay = Replay;
 
-  // ------------------------------------------------------------------ compass (reference only)
+  // ------------------------------------------------------------------ compass (head direction)
   // The glasses' compass is on your head, not the bike, and on this device it
-  // has turned the wrong way round. It no longer rotates the map; it is kept
-  // for the debug readout and the ride log so its behaviour can be studied.
+  // runs the wrong way round. It never steers the map while moving; Motion
+  // calibrates it against the track (sign + offset) and then uses it only
+  // before the first movement and while stopped (see Motion.atRest).
   const Compass = {
     value: null, at: 0, attached: false,
     raw: null, rawAt: 0, rate: 0,     // deg/s the raw reading is turning, smoothed
+    movedAt: 0,                       // last time it was swinging (a head turn in progress)
     async request() {
       try {
         const O = window.DeviceOrientationEvent, M = window.DeviceMotionEvent;
@@ -370,17 +380,19 @@
       if (finite(e.webkitCompassHeading)) h = e.webkitCompassHeading;
       else if ((e.absolute === true || e.type === 'deviceorientationabsolute') && finite(e.alpha)) h = (360 - e.alpha) % 360;
       if (h == null) return;
-      const now = Date.now();
+      const now = CH.clock();
       if (Compass.raw != null && now - Compass.rawAt > 20 && now - Compass.rawAt < 1000) {
         const r = angleDiff(Compass.raw, h) / ((now - Compass.rawAt) / 1000);
         Compass.rate += 0.3 * (r - Compass.rate);
       } else if (now - Compass.rawAt >= 1000) Compass.rate = 0;
       Compass.raw = h; Compass.rawAt = now;
+      if (Math.abs(Compass.rate) > 25) Compass.movedAt = now;
       Compass.value = Compass.value == null ? h : angleLerp(Compass.value, h, 0.25);
       Compass.at = now;
       if (Compass.onChange) Compass.onChange();
     },
-    fresh() { return Compass.value != null && Date.now() - Compass.at < 2500 ? Compass.value : null; },
+    fresh() { return Compass.value != null && CH.clock() - Compass.at < 2500 ? Compass.value : null; },
+    steady() { return Compass.fresh() != null && CH.clock() - Compass.movedAt > CFG.HEAD_STEADY_MS; },
     onChange: null,
   };
   CH.Compass = Compass;
@@ -430,6 +442,13 @@
     displayed: null,       // smoothed heading used for the rotation
     lastStep: 0,
     sidewaysRun: 0,
+    // compass calibration against the track: heading ~ sign * compass + offset.
+    // pos/neg = [sum cos, sum sin, weight] of the residual for each sign, decayed
+    cal: { pos: [0, 0, 0], neg: [0, 0, 0], sign: 1, offset: 0, conc: 0, w: 0, n: 0 },
+    calSavedAt: 0,
+    restNow: false,        // this fix found us at rest (no progress)
+    stillRun: 0,           // consecutive fixes without progress
+    restSince: 0,
     diag: { fixes: 0, accepted: 0, repeats: 0, late: 0, jumps: 0, noTs: 0, badAcc: 0, sideways: 0, tsOff: false },
     intervals: [],         // ms between accepted positions (last 60)
     lags: [],              // receipt time minus position time (last 60)
@@ -438,7 +457,7 @@
     // Position time when the fix has a believable one, else receipt time.
     time(f) {
       if (!Motion.tsTrust || !finite(f.ts)) return f.t;
-      if (!CH.REPLAY && Math.abs(f.ts - f.t) > CFG.TRACK_TS_SANE_MS) return f.t;
+      if (Math.abs(f.ts - f.t) > CFG.TRACK_TS_SANE_MS) return f.t;
       return f.ts;
     },
 
@@ -473,8 +492,66 @@
           flag = accepted ? 'ok' : 'jump';
         }
       }
+      Motion.restNow = !accepted || flag === 'rep';
       if (accepted) Motion.update(f, gpsSpeed);
+      if (Motion.restNow) Motion.atRest(f); else Motion.restSince = 0;
       Motion.record(f, flag);
+    },
+
+    // Before the first movement (app just opened, standing with the bike): the
+    // head direction orients the map, once the compass has proved itself
+    // against the track on an earlier ride, with a deadband so glances don't
+    // twitch it. Not at stops mid-ride: the ride log showed the head at a
+    // light looks at traffic, not where the bike goes next (it matched the
+    // departure at 2 stops of 6 and was 40 deg off at another), while the
+    // approach heading is where the bike is pointing. Never while moving.
+    atRest(f) {
+      if (!Motion.restSince) Motion.restSince = f.t;
+      if (Motion.course != null && Motion.courseSrc !== 'head') return;
+      const h = Motion.headHeading();
+      if (h == null || !Compass.steady()) return;
+      if (Motion.course == null || Math.abs(angleDiff(Motion.course, h)) > CFG.HEAD_DEADBAND_DEG) { Motion.course = Motion.heading = h; Motion.courseSrc = 'head'; Motion.courseAt = f.t; }
+    },
+
+    // Learn how the compass relates to the track while moving. Each sample
+    // votes for both signs; the sign whose residuals cluster tighter wins, and
+    // the cluster's direction is the offset. Decayed so it follows slow drift.
+    learnCompass(raw, f) {
+      const c = Compass.fresh();
+      if (c == null || Math.abs(Compass.rate) > 25) return;      // a swinging head is not a sample
+      const cal = Motion.cal, k = CFG.COMPASS_CAL_DECAY;
+      for (const [key, sign] of [['pos', 1], ['neg', -1]]) {
+        const a = cal[key], d = rad(raw - sign * c);
+        a[0] = a[0] * k + Math.cos(d); a[1] = a[1] * k + Math.sin(d); a[2] = a[2] * k + 1;
+      }
+      cal.n++;
+      Motion.refreshCal();
+      if (f.t - Motion.calSavedAt > 30000) Motion.saveCal();
+    },
+    refreshCal() {
+      const cal = Motion.cal;
+      const pc = Math.hypot(cal.pos[0], cal.pos[1]) / Math.max(1e-9, cal.pos[2]);
+      const nc = Math.hypot(cal.neg[0], cal.neg[1]) / Math.max(1e-9, cal.neg[2]);
+      const [key, sign, conc] = pc >= nc ? ['pos', 1, pc] : ['neg', -1, nc];
+      cal.sign = sign; cal.conc = conc; cal.w = cal[key][2];
+      cal.offset = (deg(Math.atan2(cal[key][1], cal[key][0])) + 360) % 360;
+    },
+    compassCalibrated() { return Motion.cal.w >= CFG.COMPASS_CAL_MIN_N && Motion.cal.conc >= CFG.COMPASS_CAL_MIN_CONC; },
+    // The head direction as a map heading, or null until the compass has proved itself.
+    headHeading() {
+      const c = Compass.fresh();
+      if (c == null || !Motion.compassCalibrated()) return null;
+      return (Motion.cal.sign * c + Motion.cal.offset + 720) % 360;
+    },
+    saveCal() {
+      Motion.calSavedAt = CH.clock();
+      if (CH.store && !SIM) CH.store.set('compassCal', { pos: Motion.cal.pos, neg: Motion.cal.neg, n: Motion.cal.n });
+    },
+    loadCal() {
+      const c = CH.store && CH.store.get('compassCal', null);
+      if (!c || !Array.isArray(c.pos) || !Array.isArray(c.neg) || c.pos.length !== 3 || c.neg.length !== 3) return;
+      Motion.cal.pos = c.pos.map(Number); Motion.cal.neg = c.neg.map(Number); Motion.cal.n = Number(c.n) || 0;
+      Motion.refreshCal();
     },
 
     resetTrack() { Motion.pts = []; Motion.lastPos = null; Motion.quarantine = null; Motion.raw = null; Motion.pendingRaw = null; if (Motion.moving) Motion.hold(); },
@@ -530,29 +607,37 @@
         recent = Math.hypot(p.x - q.x, p.y - q.y); recentDt = (p.time - q.time) / 1000;
         break;
       }
-      const still = recent != null && recent < Math.max(0.3 * p.acc, CFG.TRACK_STILL_K * jit);
+      // The phone's own speed, when it gives one, says "stopped" straight away.
+      const still = (recent != null && recent < Math.max(0.3 * p.acc, CFG.TRACK_STILL_K * jit)) || (gpsSpeed != null && gpsSpeed < CFG.TRACK_STOP_MPS);
       // --- speed: the phone's when it gives one, else that recent progress, and
       // only once movement is established (scatter at rest must never read as speed)
       let spd = gpsSpeed;
       if (spd == null && recent != null) spd = still || !Motion.moving ? 0 : recent / recentDt;
       if (spd != null && spd <= 25) { Motion.speed += 0.5 * (spd - Motion.speed); if (Motion.speed < 0.3) Motion.speed = 0; Motion.speedAt = f.t; }
       if (still) {
-        if (Motion.moving && Motion.recentCourses.length === 3) {
-          // just stopped: hold the steadiest of the last three headings, not whichever noisy one came last
-          const r = Motion.recentCourses, cost = (i) => r.reduce((acc, v) => acc + Math.abs(angleDiff(r[i], v)), 0);
-          let best = 0; for (let i = 1; i < 3; i++) if (cost(i) < cost(best)) best = i;
-          Motion.course = Motion.heading = r[best];
-          Motion.recentCourses = [];
+        Motion.restNow = true;
+        // The first fixes of a stop still complete the track to the stopping
+        // point (stopping just after a corner would otherwise freeze the map
+        // mid-swing); after that the position only jitters, so the heading is
+        // left alone: the steadiest of the last three is kept.
+        if (++Motion.stillRun > CFG.TRACK_STILL_FIXES) {
+          if (Motion.moving && Motion.recentCourses.length === 3) {
+            const r = Motion.recentCourses, cost = (i) => r.reduce((acc, v) => acc + Math.abs(angleDiff(r[i], v)), 0);
+            let best = 0; for (let i = 1; i < 3; i++) if (cost(i) < cost(best)) best = i;
+            Motion.course = Motion.heading = r[best];
+            Motion.recentCourses = [];
+          }
+          if (Motion.moving && p.time - Motion.rawAt > CFG.TRACK_WINDOW_MS) Motion.hold();
+          return;
         }
-        if (Motion.moving && p.time - Motion.rawAt > CFG.TRACK_WINDOW_MS) Motion.hold();
-        return;
-      }
+      } else Motion.stillRun = 0;
 
-      // --- track bearing
+      // --- track bearing, always from our own positions. The fix's heading field
+      // is never a source: on the glasses it is 0 in every fix (a placeholder,
+      // not north), which with a valid speed used to send the map north on every
+      // pull-away. It may only confirm the track (see below).
       let raw = null, src = 'track';
-      if (finite(f.heading) && f.heading >= 0 && f.heading < 360 && gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS) {
-        raw = f.heading; src = 'gps';           // the phone's own course, when it has one and we're clearly moving
-      } else {
+      {
         const base = Math.max(CFG.TRACK_BASE_MIN_M, Math.min(CFG.TRACK_BASE_MAX_M, Math.max(CFG.TRACK_BASE_K * p.acc, CFG.TRACK_JITTER_K * jit)));
         Motion.base = base;
         let path = 0, prev = p;
@@ -567,16 +652,22 @@
           break;
         }
       }
+      if (raw != null && finite(f.heading) && f.heading > 0 && f.heading < 360 && gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS
+          && Math.abs(angleDiff(raw, f.heading)) <= CFG.TRACK_GPS_AGREE_DEG) { raw = f.heading; src = 'gps'; }   // a real course that agrees is less noisy than a chord
       if (raw == null) {
+        if (!Motion.moving) Motion.restNow = true;
         if (Motion.moving && p.time - Motion.rawAt > CFG.TRACK_WINDOW_MS) Motion.hold();
         return;
       }
       if (!Motion.moving) {
-        // from rest, two bearings in a row must agree before the map turns
-        if (Motion.pendingRaw == null || Math.abs(angleDiff(Motion.pendingRaw, raw)) > CFG.TRACK_START_DEG) { Motion.pendingRaw = raw; return; }
+        // from rest, two bearings in a row must agree before the map turns, unless
+        // the phone's own speed already says we're clearly moving
+        const sure = gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS;
+        if (!sure && (Motion.pendingRaw == null || Math.abs(angleDiff(Motion.pendingRaw, raw)) > CFG.TRACK_START_DEG)) { Motion.pendingRaw = raw; return; }
         Motion.pendingRaw = null; Motion.moving = true;
       }
       Motion.raw = raw; Motion.rawAt = p.time; Motion.rawSrc = src;
+      Motion.learnCompass(raw, f);
 
       // --- the road this movement runs along gives the exact bearing
       const before = Motion.course;
@@ -610,7 +701,7 @@
     // Advance the smoothed heading (map rotation in Facing up, arrow in North
     // up). Returns true when settled.
     step(now) {
-      const t = Motion.course;
+      const t = Motion.course != null ? Motion.course : Motion.headHeading();   // before any fix: the head, if the compass is proven
       if (t == null) { Motion.displayed = null; Motion.lastStep = now; return true; }
       if (Motion.displayed == null) { Motion.displayed = t; Motion.lastStep = now; return true; }
       const dt = Math.min(0.5, Math.max(0, (now - Motion.lastStep) / 1000));
@@ -621,7 +712,7 @@
       return Math.abs(angleDiff(Motion.displayed, t)) < 0.5;
     },
 
-    speedStale(ms = 5000) { return !Motion.speedAt || Date.now() - Motion.speedAt > ms; },
+    speedStale(ms = 5000) { return !Motion.speedAt || CH.clock() - Motion.speedAt > ms; },
 
     // One line about the fix stream, for the status screen: how often positions
     // change, how many fixes just repeat the last one, how late they arrive, and
@@ -651,7 +742,7 @@
       if (f.t - Motion.logSavedAt > 10000) Motion.saveLog();
     },
     saveLog() {
-      Motion.logSavedAt = Date.now();
+      Motion.logSavedAt = CH.clock();
       if (!Motion.logDirty || !CH.store || SIM) return;        // simulated rides are not worth keeping
       Motion.logDirty = false;
       CH.store.set('rideLog', { v: 1, app: CFG.VERSION, fixes: Motion.log });
@@ -660,12 +751,19 @@
       const s = CH.store && CH.store.get('rideLog', null);
       if (!s || s.v !== 1 || !Array.isArray(s.fixes) || !s.fixes.length) return;
       const lastT = s.fixes[s.fixes.length - 1][0];
-      if (finite(lastT) && Date.now() - lastT < CFG.LOG_RESUME_MS) Motion.log = s.fixes;
+      if (finite(lastT) && CH.clock() - lastT < CFG.LOG_RESUME_MS) Motion.log = s.fixes;
     },
     exportLog() {
       return JSON.stringify({ v: 1, app: CFG.VERSION, ua: navigator.userAgent, exported: new Date().toISOString(), cols: Motion.LOG_COLS, diag: Motion.diag, fixes: Motion.log });
     },
     clearLog() { Motion.log = []; Motion.logDirty = true; Motion.saveLog(); },
+    calText() {
+      const cal = Motion.cal, c = Compass.fresh();
+      if (c == null) return Compass.attached ? 'no data' : 'off';
+      const h = Motion.headHeading();
+      const how = (cal.sign < 0 ? 'mirrored' : 'direct') + ' ' + (cal.offset <= 180 ? '+' : '-') + Math.round(cal.offset <= 180 ? cal.offset : 360 - cal.offset) + '°, fit ' + cal.conc.toFixed(2) + ', ' + Math.round(cal.w) + ' samples';
+      return Math.round(c) + '°' + (h != null ? ' = head ' + Math.round(h) + '° (' + how + ')' : ' (calibrating: ' + how + ')');
+    },
   };
   CH.Motion = Motion;
 })();

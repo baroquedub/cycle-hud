@@ -109,7 +109,7 @@
       const k = key(x, y);
       if (MapData.tiles.has(k) || MapData.pending.has(k)) return;
       const f = MapData.failed.get(k);
-      if (f && Date.now() < f.at + Math.min(300000, 15000 * Math.pow(2, f.n - 1))) return;
+      if (f && CH.clock() < f.at + Math.min(300000, 15000 * Math.pow(2, f.n - 1))) return;
       const p = MapData.fetchTile(x, y).finally(() => { MapData.pending.delete(k); MapData.refreshStatus(); });
       MapData.pending.set(k, p);
       MapData.refreshStatus();
@@ -132,27 +132,27 @@
         MapData.saveCache();
       } else {
         const f = MapData.failed.get(k) || { n: 0 };
-        MapData.failed.set(k, { n: f.n + 1, at: Date.now() });
+        MapData.failed.set(k, { n: f.n + 1, at: CH.clock() });
         MapData.error = err;
       }
       if (MapData.onChange) MapData.onChange();
     },
 
     async getTemplate() {
-      if (MapData.template && Date.now() - MapData.templateAt < 86400000) return MapData.template;
+      if (MapData.template && CH.clock() - MapData.templateAt < 86400000) return MapData.template;
       const cached = CH.store.get('tileTemplate', null);
-      if (cached && cached.url && Date.now() - cached.at < 86400000) { MapData.template = cached.url; MapData.templateAt = cached.at; return cached.url; }
+      if (cached && cached.url && CH.clock() - cached.at < 86400000) { MapData.template = cached.url; MapData.templateAt = cached.at; return cached.url; }
       try {
         const res = await fetchTimeout(CFG.TILE_JSON, {}, 10000);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const j = await res.json();
         const url = j && Array.isArray(j.tiles) && j.tiles[0];
         if (!url) throw new Error('no tiles in tilejson');
-        MapData.template = url; MapData.templateAt = Date.now();
+        MapData.template = url; MapData.templateAt = CH.clock();
         CH.store.set('tileTemplate', { url, at: MapData.templateAt });
         return url;
       } catch (e) {
-        if (cached && cached.url) { MapData.template = cached.url; MapData.templateAt = Date.now(); return cached.url; }
+        if (cached && cached.url) { MapData.template = cached.url; MapData.templateAt = CH.clock(); return cached.url; }
         throw e;
       }
     },
@@ -193,7 +193,7 @@
           }
         }
       }
-      return { x, y, classes, count, src: 'tiles', at: Date.now() };
+      return { x, y, classes, count, src: 'tiles', at: CH.clock() };
     },
 
     async fetchOverpass(x, y) {
@@ -226,7 +226,7 @@
             classes[cls].push({ cls, name: tags.name || '', bb: [minx, miny, maxx, maxy], xy });
             count++;
           }
-          return { x, y, classes, count, src: 'overpass', at: Date.now() };
+          return { x, y, classes, count, src: 'overpass', at: CH.clock() };
         } catch (e) { lastErr = e; }
       }
       throw lastErr || new Error('no mirror');
@@ -402,15 +402,15 @@
       if (!MapView.enabled || MapView.queued) return;
       if (document.visibilityState === 'hidden') return;
       MapView.queued = true;
-      const wait = Math.max(0, 100 - (Date.now() - MapView.lastDrawAt));
+      const wait = Math.max(0, 100 - (CH.clock() - MapView.lastDrawAt));
       MapView.timer = setTimeout(() => requestAnimationFrame(MapView.draw), wait);
     },
-    stop() { clearTimeout(MapView.timer); MapView.queued = false; if (!MapView.stoppedAt) MapView.stoppedAt = Date.now(); },
+    stop() { clearTimeout(MapView.timer); MapView.queued = false; if (!MapView.stoppedAt) MapView.stoppedAt = CH.clock(); },
     // Drawing is back on. Returns true when it had been off long enough that
     // the last fix may no longer be where we are.
     resume() {
-      const away = MapView.stoppedAt && Date.now() - MapView.stoppedAt > CFG.AWAY_MS;
-      if (away) MapView.resumeAt = Date.now();
+      const away = MapView.stoppedAt && CH.clock() - MapView.stoppedAt > CFG.AWAY_MS;
+      if (away) MapView.resumeAt = CH.clock();
       MapView.stoppedAt = 0;
       MapView.requestDraw();
       return !!away;
@@ -428,7 +428,7 @@
       const c = MapView.canvas;
       if (!c || !MapView.enabled) return;
       const t0 = performance.now();
-      const now = Date.now();
+      const now = CH.clock();
       MapView.lastDrawAt = now;
       const dpr = window.devicePixelRatio || 1;
       const w = c.clientWidth || 600, h = c.clientHeight || 600;
