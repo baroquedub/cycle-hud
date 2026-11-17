@@ -4,7 +4,8 @@
  *
  * Input: the Neural Band / temple swipes send ArrowUp/Down/Left/Right + Enter.
  * Main screen: Enter map/dash view · Down menu · Left/Right previous/next track.
- * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7 &box=800).
+ * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7; degradations in
+ * geo.js), or ?replay=URL to play a ride log back.
  */
 (() => {
   'use strict';
@@ -202,7 +203,24 @@
     else if (a === 'newcode') { Relay.start(true); renderPair(); toast('New code — enter it on your phone'); }
     else if (a === 'locretry') { Loc.restart(); toast('Looking for your location…'); renderStatus(); }
     else if (a === 'debug') { settings.debug = !settings.debug; store.set('debug', settings.debug); renderStatus(); updateDebug(); }
+    else if (a === 'ridelog') sendRideLog();
   });
+
+  // Publish the ride log (every fix and what the heading made of it) to the
+  // relay as a file; pair.html on the phone lists it for download.
+  let sendingLog = false;
+  async function sendRideLog() {
+    if (sendingLog) return;
+    if (!Motion.log.length) { toast('No ride log yet', 2500); return; }
+    sendingLog = true;
+    toast('Sending ride log…', 30000);
+    try {
+      const name = 'cyclehub-ride-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+      await Relay.upload(name, Motion.exportLog());
+      toast('Ride log sent · pair.html on your phone lists it', 5000);
+    } catch (e) { toast('Could not send the log: ' + (e && e.name === 'AbortError' ? 'timeout' : (e && e.message) || 'error'), 5000); }
+    sendingLog = false;
+  }
 
   function cycleZoom() {
     MapView.setZoom((MapView.zoom + 1) % CFG.ZOOMS.length);
@@ -316,8 +334,11 @@
     if (el.hidden) return;
     const f = Loc.last;
     const dg = (v) => G.finite(v) ? Math.round(v) + '°' : '–';
-    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · cmp ' + dg(Compass.fresh()) + ' v' + (Motion.votes >= 0 ? '+' : '') + Motion.votes + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '');
-    const l2 = f ? mapModeLabel() + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's' + (f.ts ? '/' + Math.max(0, Math.round((Date.now() - f.ts) / 1000)) + 's' : '') + ' ±' + Math.round(f.accuracy) + 'm · h' + dg(f.heading) + ' s' + (G.finite(f.speed) ? f.speed.toFixed(1) : '–')
+    // line 1: heading source + value, raw track bearing, drawn rotation, distance to the road used, sideways events
+    // line 2: mode, fix age + accuracy, how often positions change + share of repeated fixes, compass (reference only)
+    const D = Motion.diag, iv = Motion.median(Motion.intervals);
+    const l1 = Motion.courseSrc + ' ' + dg(Motion.course) + ' · trk ' + dg(Motion.raw) + ' · map ' + dg(Motion.displayed) + (Motion.road ? ' · ' + Math.round(Motion.road.dist) + 'm' : '') + (D.sideways ? ' · sw' + D.sideways : '');
+    const l2 = f ? (settings.mapMode === 'north' ? 'N-up' : 'Up') + ' · fix ' + Math.round((Date.now() - f.t) / 1000) + 's ±' + Math.round(f.accuracy) + 'm · ' + (iv == null ? '–' : (iv / 1000).toFixed(1) + 's') + ' ' + (D.fixes ? Math.round(100 * D.repeats / D.fixes) : 0) + '%rep · cmp ' + dg(Compass.fresh())
       : mapModeLabel() + ' · no fix yet';
     el.innerHTML = '<span>' + esc(l1) + '</span><span>' + esc(l2) + '</span>';
   }
@@ -339,7 +360,6 @@
     if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); }
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
-  Compass.onChange = () => { if (MapView.enabled) MapView.requestDraw(); };
   Loc.onStatus = () => { updateGpsPill(); if (current === 'status') renderStatus(); };
 
   // ------------------------------------------------------------------ pairing
@@ -400,12 +420,13 @@
   function renderStatus() {
     const f = Loc.last;
     const rows = [
-      ['Location', CH.DEMO ? 'demo rider' : Loc.status.state + (Loc.status.code != null ? ' (code ' + Loc.status.code + ')' : '')],
+      ['Location', CH.REPLAY ? 'replaying a ride log' : CH.DEMO ? 'demo rider' : Loc.status.state + (Loc.status.code != null ? ' (code ' + Loc.status.code + ')' : '')],
       ['Last fix', f ? ago(f.t) + (f.ts ? ' (position ' + ago(f.ts) + ')' : '') + ' · ±' + Math.round(f.accuracy) + ' m' : 'none'],
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
-      ['Course', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · ' + Motion.courseSrc + ' · ' + Motion.state],
-      ['Heading', (Motion.heading == null ? '–' : Math.round(Motion.heading) + '°') + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' · votes ' + Motion.votes + (Motion.sign < 0 ? ' (turns the wrong way)' : '') + (Math.abs(Motion.votes) >= CFG.COMPASS_MIN_VOTES ? ' · in use' : ' · not trusted yet')],
+      ['Heading', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · from ' + Motion.courseSrc + (Motion.road ? ' (' + Math.round(Motion.road.dist) + ' m away)' : '') + ' · ' + (Motion.moving ? 'moving' : 'held')],
+      ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m' + ' · compass ' + (Compass.fresh() == null ? (Compass.attached ? 'no data' : 'off') : Math.round(Compass.fresh()) + '°') + ' (not used)'],
+      ['Fix stream', Motion.diagText()],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
@@ -435,7 +456,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { keepAwake(); if (MapView.enabled) MapView.resume(); }   // geo.js restarts the location watch itself
-    else MapView.stop();
+    else { MapView.stop(); Motion.saveLog(); }
   });
 
   // ------------------------------------------------------------------ boot
@@ -443,13 +464,13 @@
     MapView.init($('map'));
     MapView.zoom = settings.zoom;
     Motion.mode = settings.mapMode;
-    Motion.votes = Math.max(-3, Math.min(3, Number(store.get('compassVotes', 0)) || 0));
-    Motion.sign = Motion.votes >= 0 ? 1 : -1;
-    store.set('compassSign', null);   // superseded by the votes
-    Motion.roadLookup = MapData.nearestRoad;
-    // The compass is always part of the heading. Try straight away (attaches
-    // directly where no permission API exists); where a prompt needs a user
-    // gesture the first attempt fails, so ask again on the first key press.
+    store.set('compassVotes', null); store.set('compassSign', null);   // the compass no longer steers the map
+    Motion.roadLookup = MapData.roadCandidates;
+    Motion.loadLog();
+    // The compass is read for the debug readout and the ride log only. Try
+    // straight away (attaches directly where no permission API exists); where a
+    // prompt needs a user gesture the first attempt fails, so ask again on the
+    // first key press.
     Compass.request().then((ok) => { if (!ok) document.addEventListener('keydown', () => { Compass.request(); }, { once: true }); });
     applyUnits();
     history.replaceState({ s: 'map', d: 0 }, '', location.pathname + location.search + '#map');
@@ -460,7 +481,8 @@
     Loc.watch(onFix);
     keepAwake();
     updateGpsPill(); updateMapPill(); updateDebug();
-    if (CH.DEMO) toast('Demo: riding a loop at ' + fmtSpeed(Sim.speed) + ' ' + unitLabel(), 3000);
+    if (CH.REPLAY) toast('Replaying a ride log', 3000);
+    else if (CH.DEMO) toast('Demo: riding a loop at ' + fmtSpeed(Sim.speed) + ' ' + unitLabel(), 3000);
     console.info('Cycle Hub', CFG.VERSION, CH.DEMO ? '[demo]' : '');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

@@ -6,6 +6,7 @@
  *          Overpass API instead. The 3x3 tiles around you are kept loaded,
  *          so there is always at least one tile (~1.5 km) of road ahead.
  * MapView: draws the loaded tiles on the canvas, rotated to your heading.
+ * MapData.roadCandidates feeds the heading (geo.js Motion) the roads around you.
  */
 (() => {
   'use strict';
@@ -250,20 +251,21 @@
       else MapData.status = loading ? 'loading' : 'error';
     },
 
-    // Nearest road to a point, for snapping the course to the street you're
-    // on. `heading` (deg) orients the segment the way you're going and rejects
-    // roads crossing your path. Returns { bearing, dist, cls } or null.
-    nearestRoad(lat, lon, radius, heading) {
-      if (!MapData.origin || !MapData.tiles.size) return null;
+    // Roads near a point, for the heading. One entry per way within `radius`
+    // metres: the axis of its nearest segment (0-180, which way along it is the
+    // caller's call), the distance and the class. Nearest first.
+    roadCandidates(lat, lon, radius) {
+      if (!MapData.origin || !MapData.tiles.size) return [];
       const [px, py] = G.project([lat, lon], MapData.origin);
-      let best = null, bestD = radius;
+      const out = [];
       for (const tile of MapData.tiles.values()) {
         for (let cls = 0; cls < 3; cls++) {            // major, minor, cycle/path (not service)
           const ways = tile.classes[cls];
           for (let k = 0; k < ways.length; k++) {
             const w = ways[k], bb = w.bb;
-            if (px < bb[0] - bestD || px > bb[2] + bestD || py < bb[1] - bestD || py > bb[3] + bestD) continue;
+            if (px < bb[0] - radius || px > bb[2] + radius || py < bb[1] - radius || py > bb[3] + radius) continue;
             const xy = w.xy;
+            let bestD = radius, axis = null;
             for (let i = 2; i < xy.length; i += 2) {
               const ax = xy[i - 2], ay = xy[i - 1], vx = xy[i] - ax, vy = xy[i + 1] - ay;
               const L2 = vx * vx + vy * vy;
@@ -273,17 +275,14 @@
               const dx = ax + vx * t - px, dy = ay + vy * t - py;
               const d = Math.sqrt(dx * dx + dy * dy);
               if (d >= bestD) continue;
-              let b = (G.deg(Math.atan2(vx, vy)) + 360) % 360;
-              if (heading != null) {
-                if (Math.abs(G.angleDiff(heading, b)) > 90) b = (b + 180) % 360;
-                if (Math.abs(G.angleDiff(heading, b)) > CFG.SNAP_MAX_DEG) continue;
-              }
-              bestD = d; best = { bearing: b, dist: d, cls };
+              bestD = d; axis = (G.deg(Math.atan2(vx, vy)) + 360) % 180;
             }
+            if (axis != null) out.push({ axis, dist: bestD, cls });
           }
         }
       }
-      return best;
+      out.sort((a, b) => a.dist - b.dist);
+      return out.length > 16 ? out.slice(0, 16) : out;
     },
 
     loadedCount() { return MapData.tiles.size; },
@@ -447,7 +446,7 @@
       MapView.stale = stale;
       if (stale) ctx.globalAlpha = 0.28 + 0.1 * Math.sin(now / 350);
       const north = CH.Motion.mode === 'north';
-      const heading = CH.Motion.displayed;           // fused, smoothed; null until known
+      const heading = CH.Motion.displayed;           // track heading, smoothed; null until we've moved
       const hdg = north ? null : heading;             // map rotation
       const th = hdg == null ? 0 : G.rad(hdg);
       const cos = Math.cos(th), sin = Math.sin(th);

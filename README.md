@@ -8,10 +8,10 @@ Built for the glasses' 600×600 additive display (black is see-through), Neural 
 
 | Where | Controls |
 |---|---|
-| Map | **Up / Down** zoom in / out · **Left / Right** previous / next track · **Enter** opens the menu · **Back** leaves the app |
-| Menu | **Pause / Play** (when media is on) · **Units** mph / km/h · **Map** Facing up / North up / Compass · **Media** Spotify / Plex / Off · **Pair phone** · **Status** |
+| Map | **Enter** switches map / dashboard view · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
+| Menu | **‹ Play/Pause ›** (when media is on) · **Units** mph / km/h · **Map** Facing up / North up · **Zoom** Normal / Close · **Media** Auto / Spotify / Plex / Off · **Pair phone** · **Status** |
 
-- The map follows your GPS course while you're moving and holds the last course when you stop, so looking around doesn't swing it. "Compass" uses the glasses' head direction instead, if you prefer.
+- In Facing up the map is rotated so that the direction the bike has just moved points up the screen: the heading is the bearing of your own track over the last dozen metres, refined to the exact bearing of the road it runs along, and held when you stop. The glasses' compass is on your head, not the bike, so it is not used (it is shown in the debug readout for reference). Status → Send ride log publishes every fix the app saw to the pairing page for replay with `index.html?replay=URL`.
 - Speed comes from the phone's GPS. It dims after 5 s without a fix and shows `--` after 15 s.
 - Road data is OpenStreetMap, delivered as [OpenFreeMap](https://openfreemap.org) vector tiles (free, no account). The 3×3 tiles around you (about 4.5 km) are kept loaded and the next ones are fetched as you cross into a new tile; the last set is cached on the glasses so the map draws immediately on the next launch. If a tile can't be fetched, the same area is asked from the Overpass API instead.
 
@@ -63,7 +63,7 @@ Serve the folder (for example `python -m http.server 8000` inside it) and open `
 index.html                   glasses screens (map, menu, pair, status) + media bar
 styles.css                   styles for the additive display
 config.js                    non-secret settings (tile source, relay, zoom steps, units)
-geo.js                       geo maths, location watch, demo rider, compass, speed/course fusion
+geo.js                       geo maths, location watch, demo rider + ride replay, compass (reference), Motion: track → heading
 mvt.js                       minimal Mapbox Vector Tile decoder
 map.js                       tile loading/caching (OpenFreeMap, Overpass fallback) and canvas drawing
 relay.js                     ntfy.sh listener for messages from pair.html

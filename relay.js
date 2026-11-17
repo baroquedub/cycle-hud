@@ -1,7 +1,8 @@
 /* Cycle Hub — relay.js
  * pair.html on your phone publishes to a private ntfy.sh topic named after
  * your pairing code; the glasses listen on the same topic. Adapted from
- * Waypoint. Payloads: {ping}, {spotify:{...}}, {plex:{...}}.
+ * Waypoint. Payloads: {ping}, {spotify:{...}}, {plex:{...}}. The glasses
+ * publish ride logs the other way as attachments (Relay.upload).
  */
 (() => {
   'use strict';
@@ -83,6 +84,18 @@
     setStatus(on) {
       Relay.connected = on;
       if (Relay.onStatus) Relay.onStatus(on);
+    },
+
+    // Publish a file to our topic as an ntfy attachment (kept 3 h), so the
+    // phone can download it from pair.html. Resolves to the attachment URL.
+    async upload(name, text) {
+      const res = await CH.fetchTimeout(`${Relay.base}/${Relay.topic()}`, {
+        method: 'PUT', body: text, headers: { Filename: name, 'Content-Type': 'application/json' },
+      }, 30000);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      if (j && j.id) Relay.markSeen(j.id);         // it's our own message: don't try to read it back
+      return (j && j.attachment && j.attachment.url) || '';
     },
 
     deliver(m) {

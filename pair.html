@@ -28,6 +28,7 @@
     code { font-size: 13px; word-break: break-all; color: var(--text); background: var(--card-2); padding: 2px 6px; border-radius: 6px; }
     details { margin-top: 10px; } summary { cursor: pointer; color: var(--dim); font-size: 14px; }
     ol { padding-left: 20px; font-size: 14px; color: var(--dim); } li { margin: 6px 0; }
+    .loglist { padding-left: 20px; font-size: 14px; color: var(--dim); } .loglist a { color: var(--accent); word-break: break-all; }
     .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--card-2); color: var(--text); padding: 10px 18px; border-radius: 999px; font-size: 15px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
     .toast[hidden] { display: none; }
     [hidden] { display: none !important; }
@@ -93,6 +94,15 @@
   </section>
 
   <p class="hint">Anyone who knows your pairing code could send settings to your glasses. Use <b>New code</b> on the glasses any time to change it.</p>
+
+  <!-- ============ RIDE LOG ============ -->
+  <section class="card">
+    <h2>4. Ride log</h2>
+    <p class="hint">For checking the map's heading after a ride. On the glasses choose <b>Menu → Status → Send ride log</b>: the file (every GPS fix and what the map made of it) comes to this page through the relay and is kept for 3 hours. Replay it in a desktop browser with <code>index.html?replay=URL</code>.</p>
+    <button class="btn secondary" id="log-fetch">Find ride logs</button>
+    <ul id="log-list" class="loglist"></ul>
+    <p class="status" id="log-status"></p>
+  </section>
 
   <div id="toast" class="toast" hidden></div>
 
@@ -233,6 +243,29 @@
       if (!/^https:\/\//.test(c.url) || !c.token) { setStatus('px-status', 'Enter an https:// server address and a token.', 'bad'); return; }
       const ok = await send({ plex: { url: c.url, token: c.token } }, true);
       setStatus('px-status', ok ? 'Sent to the glasses. They should say "Plex connected".' : 'The glasses relay did not answer.', ok ? 'ok' : 'warn');
+    });
+
+    // ---------- ride log: the glasses publish it as a file on our topic
+    $('log-fetch').addEventListener('click', async () => {
+      if (!code) { toast('Pair with your glasses first'); $('code-input').focus(); return; }
+      setStatus('log-status', 'Looking…');
+      try {
+        const res = await fetch(`${RELAY}/${CFG.RELAY_PREFIX}${code.toLowerCase()}/json?poll=1&since=12h`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const txt = await res.text();
+        const msgs = txt.split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } })
+          .filter((m) => m && m.attachment && m.attachment.url).reverse();
+        const list = $('log-list'); list.innerHTML = '';
+        const now = Date.now() / 1000;
+        for (const m of msgs) {
+          const a = m.attachment, li = document.createElement('li'), link = document.createElement('a');
+          link.href = a.url; link.textContent = a.name || 'ride log'; link.download = a.name || 'ride.json';
+          li.appendChild(link);
+          li.append(` · ${Math.max(1, Math.round((a.size || 0) / 1024))} KB · ${new Date(m.time * 1000).toLocaleString()}${a.expires && a.expires < now ? ' · expired' : ''}`);
+          list.appendChild(li);
+        }
+        setStatus('log-status', msgs.length ? `${msgs.length} log${msgs.length > 1 ? 's' : ''} found.` : 'Nothing yet. On the glasses: Menu → Status → Send ride log, then try again.', msgs.length ? 'ok' : 'warn');
+      } catch (e) { setStatus('log-status', 'The relay did not answer: ' + e.message, 'bad'); }
     });
 
     // ---------- boot
