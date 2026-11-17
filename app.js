@@ -345,7 +345,9 @@
 
   // Cheap 1 Hz housekeeping for the pills (the map itself redraws only on events).
   setInterval(() => {
-    if (document.visibilityState === 'hidden' || current !== 'map') return;
+    if (document.visibilityState === 'hidden') return;
+    Motion.tick(CH.clock());                       // compass-at-rest rules keep running if the phone goes quiet
+    if (current !== 'map') return;
     updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
     if (MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
@@ -360,6 +362,7 @@
     if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); }
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
+  Motion.onChange = () => { if (MapView.enabled) MapView.requestDraw(); if (current === 'map') updateDebug(); };
   Loc.onStatus = () => { updateGpsPill(); if (current === 'status') renderStatus(); };
 
   // ------------------------------------------------------------------ pairing
@@ -426,7 +429,7 @@
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
       ['Heading', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · from ' + Motion.courseSrc + (Motion.road ? ' (' + Math.round(Motion.road.dist) + ' m away)' : '') + ' · ' + (Motion.moving ? 'moving' : 'held')],
       ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m'],
-      ['Compass', Motion.calText() + ' · orients the map before the first movement only'],
+      ['Compass', Motion.calText() + ' · orients the map at launch and on a sustained turn while stopped'],
       ['Fix stream', Motion.diagText()],
       ['Fix fields', f ? 'heading ' + (G.finite(f.heading) ? Math.round(f.heading) + '°' : 'none') + ' · speed ' + (G.finite(f.speed) ? f.speed.toFixed(1) + ' m/s' : 'none') : '–'],
       ['Map tiles', MapData.loadedCount() + ' loaded · ' + MapData.wayCount() + ' ways · ' + MapData.pending.size + ' loading' + (MapData.lastSrc ? ' · last from ' + MapData.lastSrc : '')],

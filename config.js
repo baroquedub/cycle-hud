@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.7.1',
+  VERSION: '0.7.2',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -47,6 +47,8 @@ window.CH.CONFIG = {
   TRACK_JITTER_K: 8,         // ...or this many times the measured fix jitter (median scatter), whichever is longer
   TRACK_STILL_K: 3,          // progress over TRACK_SPEED_MS below this many times the jitter = standing still: heading held, speed 0
   TRACK_STILL_FIXES: 2,      // the first fixes of a stop still finish the track to the stopping point; after that the heading is held
+  TRACK_DEPART_M: 4,         // leaving a stop: the bearing from the averaged stop point is used from this far out...
+  TRACK_DEPART_MPS: 1.0,     // ...once the phone's speed is at least this (no speed field: the normal baseline applies)
   TRACK_WINDOW_MS: 15000,    // covering the baseline took longer than this = standing still: hold the heading
   TRACK_WIGGLE: 2.5,         // path length / straight-line distance above this = jitter at a standstill, not travel
   TRACK_START_DEG: 45,       // from a standstill, two consecutive track bearings must agree this well before the map turns
@@ -74,20 +76,24 @@ window.CH.CONFIG = {
   SNAP_STICK_M: 8,
   SNAP_STICK_DEG: 25,
 
-  // Compass before the first movement. While moving, the glasses' compass is
-  // calibrated against the track (sign and offset learned with exponential
-  // decay, kept as ch.compassCal; on this device it is mirrored with a small
-  // offset). Once it has agreed on COMPASS_CAL_MIN_N samples with a fit of at
-  // least COMPASS_CAL_MIN_CONC (1 = perfect), the head direction orients the
-  // map when the app opens, until the first track heading: a head direction
-  // steady for HEAD_STEADY_MS and more than HEAD_DEADBAND_DEG from the shown
-  // one rotates the map. Never while moving, and not at stops mid-ride (the
-  // approach heading is where the bike points; the head looks at traffic).
+  // Compass at rest. While moving, the glasses' compass is calibrated against
+  // the track (sign and offset learned with exponential decay, kept as
+  // ch.compassCal; on this device it is mirrored with a small offset). Once it
+  // has agreed on COMPASS_CAL_MIN_N samples with a fit of at least
+  // COMPASS_CAL_MIN_CONC (1 = perfect): when the app opens, the head direction
+  // orients the map as soon as it has been steady for HEAD_STEADY_MS; stopped
+  // mid-ride, the map holds the approach heading and only reorients on a
+  // sustained turn, i.e. the head more than HEAD_TURN_DEG from the shown
+  // heading for HEAD_HOLD_MS with every once-a-second sample within
+  // HEAD_SPREAD_DEG of their mean (a bike turned round, not a glance down a
+  // side street). Never while moving.
   COMPASS_CAL_DECAY: 0.995,
   COMPASS_CAL_MIN_N: 60,
   COMPASS_CAL_MIN_CONC: 0.85,
   HEAD_STEADY_MS: 1500,
-  HEAD_DEADBAND_DEG: 25,
+  HEAD_TURN_DEG: 70,
+  HEAD_HOLD_MS: 4000,
+  HEAD_SPREAD_DEG: 30,
 
   // Self-check: in Facing up the track must point up the screen. When the
   // drawn rotation is further than this from the track for two fixes running,

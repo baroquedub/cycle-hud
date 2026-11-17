@@ -448,7 +448,11 @@
     calSavedAt: 0,
     restNow: false,        // this fix found us at rest (no progress)
     stillRun: 0,           // consecutive fixes without progress
-    restSince: 0,
+    stopPt: null,          // { x, y, n } running mean of the fixes at the current stop: a near noise-free anchor for the departure bearing
+    departing: false,      // the departure bearing (from stopPt) has been used since the last stop
+    departDone: false,     // far enough from the stop for the normal baseline to take over
+    headWin: [],           // { t, h } head headings seen at rest that differ from the shown heading by more than HEAD_TURN_DEG
+    onChange: null,        // app hook: the heading changed without a fix (compass at rest)
     diag: { fixes: 0, accepted: 0, repeats: 0, late: 0, jumps: 0, noTs: 0, badAcc: 0, sideways: 0, tsOff: false },
     intervals: [],         // ms between accepted positions (last 60)
     lags: [],              // receipt time minus position time (last 60)
@@ -494,23 +498,48 @@
       }
       Motion.restNow = !accepted || flag === 'rep';
       if (accepted) Motion.update(f, gpsSpeed);
-      if (Motion.restNow) Motion.atRest(f); else Motion.restSince = 0;
+      if (Motion.restNow) Motion.atRest(f); else Motion.headWin = [];
       Motion.record(f, flag);
     },
 
-    // Before the first movement (app just opened, standing with the bike): the
-    // head direction orients the map, once the compass has proved itself
-    // against the track on an earlier ride, with a deadband so glances don't
-    // twitch it. Not at stops mid-ride: the ride log showed the head at a
-    // light looks at traffic, not where the bike goes next (it matched the
-    // departure at 2 stops of 6 and was 40 deg off at another), while the
-    // approach heading is where the bike is pointing. Never while moving.
+    // Once a second from the app while no fixes arrive (a phone may go quiet at
+    // a standstill): the rest rules still run on the compass.
+    tick(now) {
+      if ((Motion.restNow || !Motion.moving) && now - Motion.lastFixAt > 1500) Motion.atRest({ t: now });
+    },
+
+    setCourse(h, src, t) {
+      Motion.course = Motion.heading = h; Motion.courseSrc = src; Motion.courseAt = t;
+      Motion.road = null; Motion.recentCourses = [];
+      if (Motion.onChange) Motion.onChange();
+    },
+
+    // At rest, once the compass has proved itself against the track (on this
+    // ride or an earlier one). App just opened: the head orients the map as
+    // soon as it is steady. Stopped mid-ride: the map holds the approach
+    // heading and only reorients on a sustained turn, i.e. the head more than
+    // HEAD_TURN_DEG from the shown heading for HEAD_HOLD_MS with every
+    // once-a-second sample within HEAD_SPREAD_DEG of their mean. That is a
+    // bike turned round or a direction decided on; a look down a side street
+    // or at traffic (the ride log showed 40 deg for 30 s) is ignored. Never
+    // while moving: the track owns the heading then.
     atRest(f) {
-      if (!Motion.restSince) Motion.restSince = f.t;
-      if (Motion.course != null && Motion.courseSrc !== 'head') return;
       const h = Motion.headHeading();
-      if (h == null || !Compass.steady()) return;
-      if (Motion.course == null || Math.abs(angleDiff(Motion.course, h)) > CFG.HEAD_DEADBAND_DEG) { Motion.course = Motion.heading = h; Motion.courseSrc = 'head'; Motion.courseAt = f.t; }
+      if (h == null) { Motion.headWin = []; return; }
+      if (Motion.course == null) {
+        if (Compass.steady()) Motion.setCourse(h, 'head', f.t);
+        return;
+      }
+      if (Math.abs(angleDiff(Motion.course, h)) <= CFG.HEAD_TURN_DEG) { Motion.headWin = []; return; }
+      const w = Motion.headWin;
+      if (w.length && f.t - w[w.length - 1].t < 900) return;          // one sample a second, whatever the fix rate
+      w.push({ t: f.t, h });
+      while (w.length && f.t - w[0].t > CFG.HEAD_HOLD_MS + 1500) w.shift();
+      if (f.t - w[0].t < CFG.HEAD_HOLD_MS) return;
+      let cx = 0, cy = 0;
+      for (const o of w) { cx += Math.cos(rad(o.h)); cy += Math.sin(rad(o.h)); }
+      const mean = (deg(Math.atan2(cy, cx)) + 360) % 360;
+      if (w.every((o) => Math.abs(angleDiff(mean, o.h)) <= CFG.HEAD_SPREAD_DEG)) { Motion.setCourse(mean, 'head', f.t); Motion.headWin = []; }
     },
 
     // Learn how the compass relates to the track while moving. Each sample
@@ -616,6 +645,10 @@
       if (spd != null && spd <= 25) { Motion.speed += 0.5 * (spd - Motion.speed); if (Motion.speed < 0.3) Motion.speed = 0; Motion.speedAt = f.t; }
       if (still) {
         Motion.restNow = true;
+        // Average the fixes at this stop: the anchor for the departure bearing.
+        if (Motion.departing || Motion.departDone) { Motion.stopPt = null; Motion.departing = false; Motion.departDone = false; }
+        if (!Motion.stopPt) Motion.stopPt = { x: p.x, y: p.y, n: 1 };
+        else { const sp = Motion.stopPt; sp.n++; sp.x += (p.x - sp.x) / sp.n; sp.y += (p.y - sp.y) / sp.n; }
         // The first fixes of a stop still complete the track to the stopping
         // point (stopping just after a corner would otherwise freeze the map
         // mid-swing); after that the position only jitters, so the heading is
@@ -637,9 +670,21 @@
       // not north), which with a valid speed used to send the map north on every
       // pull-away. It may only confirm the track (see below).
       let raw = null, src = 'track';
-      {
-        const base = Math.max(CFG.TRACK_BASE_MIN_M, Math.min(CFG.TRACK_BASE_MAX_M, Math.max(CFG.TRACK_BASE_K * p.acc, CFG.TRACK_JITTER_K * jit)));
-        Motion.base = base;
+      const base = Math.max(CFG.TRACK_BASE_MIN_M, Math.min(CFG.TRACK_BASE_MAX_M, Math.max(CFG.TRACK_BASE_K * p.acc, CFG.TRACK_JITTER_K * jit)));
+      Motion.base = base;
+      // Leaving a stop: the bearing from the averaged stop point has only one
+      // noisy end, so it is usable from TRACK_DEPART_M (about 20 deg at 4 m with
+      // the usual jitter, 7 deg at 12 m) once the phone's speed says we're
+      // moving. Without a speed field the normal baseline applies.
+      const sp = Motion.stopPt;
+      if (sp && !Motion.departDone) {
+        const d = Math.hypot(p.x - sp.x, p.y - sp.y);
+        if (d >= base) Motion.departDone = true;
+        if (d >= CFG.TRACK_DEPART_M && gpsSpeed != null && gpsSpeed >= CFG.TRACK_DEPART_MPS) {
+          raw = (deg(Math.atan2(p.x - sp.x, p.y - sp.y)) + 360) % 360; src = 'depart'; Motion.departing = true;
+        }
+      }
+      if (raw == null) {
         let path = 0, prev = p;
         for (let i = n - 2; i >= 0; i--) {
           const q = pts[i];
@@ -662,7 +707,7 @@
       if (!Motion.moving) {
         // from rest, two bearings in a row must agree before the map turns, unless
         // the phone's own speed already says we're clearly moving
-        const sure = gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS;
+        const sure = src === 'depart' || (gpsSpeed != null && gpsSpeed >= CFG.TRACK_GPS_COURSE_MPS);
         if (!sure && (Motion.pendingRaw == null || Math.abs(angleDiff(Motion.pendingRaw, raw)) > CFG.TRACK_START_DEG)) { Motion.pendingRaw = raw; return; }
         Motion.pendingRaw = null; Motion.moving = true;
       }
@@ -732,11 +777,11 @@
     },
 
     // --- ride log: every fix and what the heading made of it
-    LOG_COLS: ['t', 'ts', 'lat', 'lon', 'acc', 'heading', 'speed', 'compass', 'track', 'course', 'map', 'flag', 'true'],
+    LOG_COLS: ['t', 'ts', 'lat', 'lon', 'acc', 'heading', 'speed', 'compass', 'track', 'course', 'map', 'flag', 'true', 'src'],
     record(f, flag) {
       const r = (v, d) => finite(v) ? Number(v.toFixed(d)) : null;
       Motion.log.push([f.t, finite(f.ts) ? f.ts : null, r(f.lat, 6), r(f.lon, 6), r(f.accuracy, 0), r(f.heading, 0), r(f.speed, 1),
-        r(Compass.fresh(), 0), r(Motion.raw, 0), r(Motion.course, 0), r(Motion.displayed, 0), flag, r(f._true, 0)]);
+        r(Compass.fresh(), 0), r(Motion.raw, 0), r(Motion.course, 0), r(Motion.displayed, 0), flag, r(f._true, 0), Motion.courseSrc]);
       if (Motion.log.length > CFG.LOG_MAX) Motion.log.splice(0, Motion.log.length - CFG.LOG_MAX);
       Motion.logDirty = true;
       if (f.t - Motion.logSavedAt > 10000) Motion.saveLog();
