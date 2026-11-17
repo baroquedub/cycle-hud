@@ -21,7 +21,17 @@
       <button id="map-focus" class="map-focus" aria-label="Map. Select switches between the map and the dashboard, down opens the menu, left and right skip tracks."></button>
       <canvas id="map" width="600" height="400" aria-hidden="true"></canvas>
 
+      <!-- speed dial: a 270-degree gauge arc from 7:30 clockwise over the top to 4:30
+           (the <g> rotation puts the circle's start at 7:30), a dot riding its tip -->
       <div class="pill speed" id="speed-pill" aria-live="off">
+        <svg class="speed-gauge" viewBox="0 0 120 120" aria-hidden="true">
+          <g transform="rotate(135 60 60)">
+            <circle class="gauge-track" cx="60" cy="60" r="54"/>
+            <circle class="gauge-fill" id="speed-arc" cx="60" cy="60" r="54"/>
+          </g>
+          <circle class="gauge-dot" cx="21.8" cy="98.2" r="3"/>
+          <circle class="gauge-dot tip" id="speed-tip" cx="21.8" cy="98.2" r="4.5"/>
+        </svg>
         <span class="speed-val" id="speed-val">--</span>
         <span class="speed-unit" id="speed-unit">mph</span>
       </div>
@@ -37,6 +47,7 @@
           <div class="media-artist" id="media-artist"></div>
         </div>
         <div class="media-ctl" aria-hidden="true"><span>‹</span><span>›</span></div>
+        <div class="media-prog" id="media-prog" hidden aria-hidden="true"><div class="media-prog-fill" id="media-prog-fill"></div></div>
       </div>
     </section>
 

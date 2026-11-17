@@ -18,9 +18,10 @@
     inflight: false,
     inflightAt: 0,
     backoff: CFG.MEDIA_POLL_MS,
-    last: { state: 'idle', playing: false, title: '', artist: '' },
+    last: { state: 'idle', playing: false, title: '', artist: '', pos: null, dur: null, posAt: 0 },
     lastPollAt: 0,
     lastTitle: null,
+    lastProg: -1,        // fraction last drawn on the progress line (-1 = hidden)
     onState: null,       // app hook (so the menu's Play/Pause row can follow)
     toast: (msg) => console.log('[media]', msg),
 
@@ -35,14 +36,14 @@
       Media.sourceKey = key;
       Media.source = null; Media.other = null;
       Media.pollId++; Media.inflight = false;
-      Media.last = { state: 'idle', playing: false, title: '', artist: '' };
+      Media.last = { state: 'idle', playing: false, title: '', artist: '', pos: null, dur: null, posAt: 0 };
       Media.lastTitle = null;
       const bar = $('media-bar');
       if (key === 'off') { bar.hidden = true; Media.render(); return; }
       bar.hidden = false;
       const keys = key === 'auto' ? ['spotify', 'plex'] : [key];
       const ready = keys.filter((k) => all[k].start(CH.store.get(k, null)));   // the paired ones
-      if (!ready.length) { Media.source = all[keys[0]]; Media.last = { state: 'auth', playing: false, title: '', artist: '' }; Media.render(); return; }
+      if (!ready.length) { Media.source = all[keys[0]]; Media.last = { state: 'auth', playing: false, title: '', artist: '', pos: null, dur: null, posAt: 0 }; Media.render(); return; }
       Media.source = all[ready[0]];
       Media.other = ready.length > 1 ? all[ready[1]] : null;
       Media.backoff = CFG.MEDIA_POLL_MS;
@@ -90,18 +91,50 @@
 
     apply(r) {
       const prev = Media.last;
+      const keep = r.state === 'offline' || r.state === 'ratelimit';   // nothing new known: show what we had
+      const ms = (v) => Number.isFinite(v) && v >= 0 ? v : null;
       Media.last = {
         state: r.state,
-        playing: r.state === 'ok' ? !!r.playing : (r.state === 'ratelimit' || r.state === 'offline') ? prev.playing : false,
-        title: r.state === 'ok' ? r.title : (r.state === 'offline' || r.state === 'ratelimit') ? prev.title : '',
-        artist: r.state === 'ok' ? r.artist : (r.state === 'offline' || r.state === 'ratelimit') ? prev.artist : '',
+        playing: r.state === 'ok' ? !!r.playing : keep ? prev.playing : false,
+        title: r.state === 'ok' ? r.title : keep ? prev.title : '',
+        artist: r.state === 'ok' ? r.artist : keep ? prev.artist : '',
+        // position in the track (ms) at the moment posAt, and the track length
+        pos: r.state === 'ok' ? ms(r.pos) : keep ? prev.pos : null,
+        dur: r.state === 'ok' ? ms(r.dur) : keep ? prev.dur : null,
+        posAt: r.state === 'ok' ? Date.now() : keep ? prev.posAt : 0,
       };
       Media.render();
       if (Media.onState) Media.onState(Media.last);
     },
 
+    // How far through the current track we are (0..1), extrapolated from the
+    // last poll while playing; null when there is nothing to show. Kept up
+    // through an offline / rate-limited spell (the bar keeps the track then
+    // too) so a network blip doesn't make the line flicker; the next good
+    // poll corrects it.
+    progress() {
+      const L = Media.last;
+      if (!(L.state === 'ok' || L.state === 'offline' || L.state === 'ratelimit') || !(L.dur > 0) || L.pos == null) return null;
+      const p = L.pos + (L.playing ? Date.now() - L.posAt : 0);
+      return Math.min(1, Math.max(0, p / L.dur));
+    },
+
+    // The thin line along the bottom of the bar. Called on every render and
+    // once a second from app.js so it creeps between polls.
+    renderProgress() {
+      const box = $('media-prog'), fill = $('media-prog-fill');
+      const f = $('media-bar').hidden ? null : Media.progress();
+      if (f == null) { box.hidden = true; Media.lastProg = -1; return; }
+      box.hidden = false;
+      // going backwards (new track, a seek) must snap, not animate over a second
+      fill.classList.toggle('snap', f < Media.lastProg);
+      fill.style.width = (f * 100).toFixed(2) + '%';
+      Media.lastProg = f;
+    },
+
     render() {
       const bar = $('media-bar');
+      Media.renderProgress();
       if (bar.hidden) return;
       const L = Media.last, src = Media.source;
       const title = $('media-title'), artist = $('media-artist'), glyph = $('media-glyph');

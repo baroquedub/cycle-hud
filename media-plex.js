@@ -66,6 +66,7 @@
           playing: !!(t.Player && t.Player.state === 'playing'),
           title: t.title || '',
           artist: t.grandparentTitle || t.originalTitle || '',
+          pos: t.viewOffset, dur: t.duration,      // ms into the track / track length
         };
       } catch (e) {
         Plex.lastError = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'error';   // a TypeError here usually means CORS/unreachable

@@ -25,7 +25,7 @@
   const settings = {
     units: store.get('units', CFG.DEFAULT_UNITS),         // 'mph' | 'kmh'
     mapMode: store.get('mapMode', 'auto'),                 // 'auto' (facing up) | 'north'
-    view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock)
+    view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock on the media bar's row, dimmed)
     media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off'
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
     debug: store.get('debug', true),                       // on-map readout, toggled on the Status screen
@@ -51,8 +51,11 @@
   function fmtSpeed(mps) {
     if (!G.finite(mps)) return '--';
     const v = settings.units === 'mph' ? mps * 2.236936 : mps * 3.6;
-    return v < 10 ? v.toFixed(1) : String(Math.round(v));
+    return v.toFixed(1);                        // always one decimal: cyclists read 14.2, not 14
   }
+  // Speed dial gauge: a circle of radius 54 in a 120 x 120 viewBox, its path
+  // rotated to start at 7:30 and sweep 270 degrees clockwise (index.html).
+  const GAUGE_R = 54, GAUGE_C = 2 * Math.PI * GAUGE_R, GAUGE_START_DEG = 135, GAUGE_SWEEP_DEG = 270;
   const unitLabel = () => settings.units === 'mph' ? 'mph' : 'km/h';
   function fmtClock(d) {
     const h = d.getHours(), m = d.getMinutes();
@@ -300,6 +303,13 @@
     const stale5 = Motion.speedStale(5000), stale15 = Motion.speedStale(15000);
     $('speed-val').textContent = stale15 ? '--' : fmtSpeed(Motion.speed);
     pill.classList.toggle('dim', stale5 && !stale15);
+    // gauge arc: the first frac x 270 degrees of the circle, and the dot at its tip
+    const frac = stale15 || !G.finite(Motion.speed) ? 0 : Math.min(1, Math.max(0, Motion.speed / CFG.SPEED_GAUGE_FULL_MPS));
+    $('speed-arc').style.strokeDashoffset = (GAUGE_C * (1 - 0.75 * frac)).toFixed(1);
+    const a = (GAUGE_START_DEG + GAUGE_SWEEP_DEG * frac) * Math.PI / 180;   // SVG angle: clockwise from 3 o'clock
+    const tip = $('speed-tip').style;
+    tip.cx = (60 + GAUGE_R * Math.cos(a)).toFixed(1) + 'px';
+    tip.cy = (60 + GAUGE_R * Math.sin(a)).toFixed(1) + 'px';
   }
 
   function updateGpsPill() {
@@ -349,6 +359,7 @@
     Motion.tick(CH.clock());                       // compass-at-rest rules keep running if the phone goes quiet
     if (current !== 'map') return;
     updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
+    Media.renderProgress();                        // the track progress line creeps between polls
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
     if (MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
   }, 1000);

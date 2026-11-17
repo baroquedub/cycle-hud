@@ -75,7 +75,7 @@
         const artist = item.type === 'episode'
           ? ((item.show && item.show.name) || '')
           : (item.artists || []).map((a) => a.name).join(', ');
-        return { state: 'ok', playing: !!j.is_playing, title: item.name || '', artist };
+        return { state: 'ok', playing: !!j.is_playing, title: item.name || '', artist, pos: j.progress_ms, dur: item.duration_ms };
       } catch (e) {
         if (e && e.auth) return { state: 'auth' };
         Spotify.lastError = (e && e.name === 'AbortError') ? 'timeout' : (e && e.message) || 'error';
