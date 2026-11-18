@@ -141,7 +141,7 @@
       store.set('code', code);
       renderPair();
       const ok = await send({ ping: true }, true);
-      setStatus('pair-status', ok ? 'Paired. The glasses should say "Phone paired".' : 'Saved, but the relay did not answer.', ok ? 'ok' : 'warn');
+      setStatus('pair-status', ok ? 'Paired. The glasses should say "Phone paired". For music, now press Connect Spotify or Send to glasses below.' : 'Saved, but the relay did not answer.', ok ? 'ok' : 'warn');
     });
     $('pair-change').addEventListener('click', () => { code = ''; store.set('code', null); $('code-input').value = ''; $('pair-save').disabled = true; renderPair(); $('code-input').focus(); });
     $('pair-ping').addEventListener('click', async () => { const ok = await send({ ping: true }, true); setStatus('pair-status', ok ? 'Sent. The glasses should say "Phone paired".' : 'The relay did not answer.', ok ? 'ok' : 'bad'); });

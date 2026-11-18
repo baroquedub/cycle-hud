@@ -84,6 +84,8 @@ Now-playing comes from the server; play, pause and skip are relayed through it t
 ## Troubleshooting
 
 - **Location blocked**: allow location for web apps in the Meta AI app, then reopen CycleHUD.
+- **Music bar says "Spotify not connected" (or Plex) after pairing**: pairing only opens the channel between phone and glasses. Open the pair page on the phone and press **Connect Spotify** (or **Send to glasses** for Plex); the glasses say "Spotify connected" within a few seconds.
+- **Reinstalled the app under a new address?** Each web app has its own storage on the glasses, so pair the phone and connect your music again.
 - **"Reconnecting…" on the music bar**: the phone is offline or asleep; it recovers by itself.
 - **Plex says "player not in server client list"**: bring Plexamp to the foreground on your phone.
 - **Spotify or Plex forgotten after a glasses update**: open the pair page and press **Connect Spotify** / **Send to glasses** again.

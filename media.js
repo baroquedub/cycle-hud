@@ -141,7 +141,7 @@
       const title = $('media-title'), artist = $('media-artist'), glyph = $('media-glyph');
       let t = L.title, a = L.artist;
       if (L.state === 'idle' && !t) { t = 'Nothing playing'; a = 'Start it on your phone'; }
-      else if (L.state === 'auth') { t = src ? src.label + ' not paired' : 'Not paired'; a = 'Menu → Pair phone'; }
+      else if (L.state === 'auth') { t = src ? src.label + ' not connected' : 'Not connected'; a = Media.connectHint(src); }
       else if (L.state === 'offline') { a = (a ? a + ' · ' : '') + 'Reconnecting…' + (src && src.lastError ? ' (' + src.lastError + ')' : ''); }
       if (title.textContent !== t) { title.textContent = t; Media.marquee(title, t); }
       artist.textContent = a;
@@ -170,7 +170,7 @@
     async act(name) {
       const src = Media.source;
       if (!src) { Media.toast('Media is off'); return; }
-      if (Media.last.state === 'auth') { Media.toast(src.label + ' not paired — Menu → Pair phone'); return; }
+      if (Media.last.state === 'auth') { Media.toast(src.label + ' not connected — ' + Media.connectHint(src)); return; }
       if (!src.canControl) { Media.toast(src.label + ': control unavailable'); return; }
       if (name === 'toggle') name = Media.last.playing ? 'pause' : 'play';
       // optimistic
@@ -196,6 +196,13 @@
       Media.render();
     },
 
+    // What to do next when a source has no credentials: pair the phone first, then press the
+    // source's button on the pair page (pairing alone only opens the channel).
+    connectHint(src) {
+      const paired = CH.Relay && CH.Relay.lastDeliveredAt > 0;
+      const btn = src && src.label === 'Plex' ? 'Send to glasses' : 'Connect Spotify';
+      return paired ? 'On the pair page press ' + btn : 'Menu → Pair phone, then ' + btn;
+    },
     statusText() {
       if (Media.sourceKey === 'off') return 'off';
       const s = Media.source ? Media.source.statusText() : '';

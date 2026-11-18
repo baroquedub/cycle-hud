@@ -109,7 +109,7 @@
     },
 
     statusText() {
-      if (!Spotify.creds) return 'not paired';
+      if (!Spotify.creds) return 'not connected (pair page)';
       const left = Math.round((Spotify.creds.expiresAt - Date.now()) / 1000);
       return 'paired · token ' + (left > 0 ? 'ok for ' + Math.round(left / 60) + ' min' : 'expired, will refresh') + (Spotify.lastError ? ' · ' + Spotify.lastError : '');
     },

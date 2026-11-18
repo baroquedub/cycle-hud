@@ -131,7 +131,7 @@
     },
 
     statusText() {
-      if (!Plex.creds) return 'not paired';
+      if (!Plex.creds) return 'not connected (pair page)';
       return 'paired · ' + (Plex.playerName ? 'player ' + Plex.playerName : 'no player yet') + (Plex.lastError ? ' · ' + Plex.lastError : '') + (Plex.lastControl ? ' · last control: ' + Plex.lastControl : '');
     },
   };

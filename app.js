@@ -455,7 +455,8 @@
     const recent = Relay.lastDeliveredAt && CH.clock() - Relay.lastDeliveredAt < 180000;
     el.classList.toggle('on', Relay.connected || recent);
     el.classList.toggle('paired', recent);
-    $('pair-status-text').textContent = recent ? (pairMsg || 'Phone paired ✓') + ' · ' + ago(Relay.lastDeliveredAt)
+    const next = !pairMsg && !CH.SpotifySource.creds && !CH.PlexSource.creds ? ' · for music press Connect Spotify or Send to glasses on the phone' : '';
+    $('pair-status-text').textContent = recent ? (pairMsg || 'Phone paired ✓') + next + ' · ' + ago(Relay.lastDeliveredAt)
       : Relay.connected ? 'Ready — waiting for your phone' : 'Connecting…';
   }
   setInterval(() => { if (current === 'pair') renderRelayDot(); }, 2000);
