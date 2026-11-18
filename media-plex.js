@@ -1,4 +1,5 @@
-/* Cycle Hub — media-plex.js
+/* CycleHUD — media-plex.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Plex source. Now-playing from your Plex Media Server's /status/sessions;
  * transport controls relayed through the server's Plex Companion endpoint
  * (/player/playback/*) to the Plexamp player. Credentials {url, token}

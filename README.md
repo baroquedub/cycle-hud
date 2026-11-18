@@ -1,78 +1,148 @@
-# Cycle Hub
+# CycleHUD
 
-A cycling heads-up hub for **Meta Ray-Ban Display** glasses. It shows a street map of where you are that rotates to face the way you're riding (like the built-in navigation, but with no destination needed), your speed, the time, and a mini player for Spotify or Plexamp.
+<p align="center"><img src="docs/card.png" alt="CycleHUD. Your ride. At a glance. A cycling heads-up display for Meta Ray-Ban Display. Live map, live speed, ride time, now playing." width="100%"></p>
 
-Built for the glasses' 600×600 additive display (black is see-through), Neural Band / temple-swipe input (arrow keys + Enter), phone-sourced `navigator.geolocation`, and a plain static site: no build step, no framework, no server.
+<table>
+<tr>
+<td width="40%"><img src="docs/ss-1.jpg" alt="Map View: a street map rotated to face the way you are riding, speed dial, ride time, clock and the music bar, seen over a London street" width="100%"></td>
+<td>
 
-## On the glasses
+**Your ride, in view.** CycleHUD draws the streets around you and turns them to face the way you are riding, with no destination to type and no turn-by-turn nagging. **Map View** shows the road ahead with your speed, ride time and what is playing round the edges; **Glance View** drops the map for a quiet strip of speed, music and time. Pair your phone once to control Spotify or Plexamp from the glasses: tap to pause, swipe to skip.
+
+Free and open source (AGPL). Map data from OpenStreetMap via OpenFreeMap. Spotify control needs Premium.
+
+**Live map · Live speed · Ride time · Now playing**
+
+Runs on **Meta Ray-Ban Display** glasses as a web app: nothing to install on your phone, no account to create.
+
+</td>
+</tr>
+</table>
+
+## Add it to your glasses
+
+<table>
+<tr>
+<td width="30%"><img src="docs/add-to-glasses-qr.png" alt="QR code that adds CycleHUD to your glasses through the Meta AI app" width="100%"></td>
+<td>
+
+1. In the **Meta AI** app go to Settings and tap the app version number until **Developer Mode** appears.
+2. Open your glasses' settings → **App connections** → **Web apps** → **Add a web app** and paste
+   `https://baroquedub.github.io/cycle-hud/`
+   (or scan this QR code with your phone camera: it opens the Meta AI app and offers to add it).
+3. Open **CycleHUD** from the glasses' launcher and allow location when asked. The map works straight away.
+
+</td>
+</tr>
+</table>
+
+## On the ride
 
 | Where | Controls |
 |---|---|
-| Map | **Enter** switches map / dashboard view · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
-| Menu | **‹ Play/Pause ›** (when media is on) · **Units** mph / km/h · **Map** Facing up / North up · **Zoom** Normal / Close · **Media** Auto / Spotify / Plex / Off · **Pair phone** · **Status** |
+| Map View / Glance View | **Select** switches between Map View and Glance View · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
+| Menu | **‹ Play/Pause ›** · **Zoom** Normal / Close · **Map** Facing up / North up · **Units** mph / km/h · **Media** Auto / Spotify / Plex / Off · **Pair phone** · **Status** |
 
-- In Facing up the map is rotated so that the direction the bike has just moved points up the screen: the heading is the bearing of your own track over the last dozen metres (fine-tuned to the road it runs along), held when you stop, and picked up again within a few metres of moving off. The glasses' compass is on your head, not the bike, so it never steers the map while riding; once it has calibrated itself against the track it orients the map when the app opens and, at a stop, only after a sustained turn of more than 70 degrees held for several seconds (turning the bike round), never for a glance. Status → Send ride log publishes every fix the app saw to the pairing page for replay with `index.html?replay=URL`.
-- Speed comes from the phone's GPS. It dims after 5 s without a fix and shows `--` after 15 s.
-- Road data is OpenStreetMap, delivered as [OpenFreeMap](https://openfreemap.org) vector tiles (free, no account). The 3×3 tiles around you (about 4.5 km) are kept loaded and the next ones are fetched as you cross into a new tile; the last set is cached on the glasses so the map draws immediately on the next launch. If a tile can't be fetched, the same area is asked from the Overpass API instead.
+<table>
+<tr>
+<td width="33%"><img src="docs/ss-2.jpg" alt="Glance View: speed dial, music bar and clock on one row, no map" width="100%"></td>
+<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: play, previous, next, zoom, map mode, units, media source, pair phone, status" width="100%"></td>
+<td width="33%"><img src="docs/ss-4.jpg" alt="Pair phone screen showing the pairing address and an 8-character code" width="100%"></td>
+</tr>
+<tr>
+<td align="center">Glance View: speed, music and time, nothing else.</td>
+<td align="center">One menu: play, skip, units, map, zoom.</td>
+<td align="center">Pair your phone once.</td>
+</tr>
+</table>
 
-## Putting it on GitHub Pages
+- **Facing up** rotates the map so the direction you have just moved points up the screen; **North up** keeps the map still and turns the arrow. The map holds its heading while you wait at a junction and picks the new direction up within a few metres of moving off.
+- Speed and ride time come from the phone's GPS. The speed dims after 5 s without a fix and shows `--` after 15 s.
+- The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge. **Media: Auto** shows whichever one is playing.
 
-1. Create a new **public** repository (e.g. `cycle-hub`).
-2. Push this folder to it (or upload everything, including the hidden `.well-known` folder and `.nojekyll` file).
-3. **Settings → Pages → Source: Deploy from a branch → main / (root) → Save.**
-4. After a minute the app is live at `https://baroquedub.github.io/cycle-hub/`.
-5. Add it on the glasses the same way as other web apps (Meta AI app → Developer Mode → add the link or scan a QR code).
+## Pair your phone (needed for music)
 
-`.nojekyll` matters: without it GitHub Pages hides the `.well-known` folder, and the glasses won't find the app's name and icon.
+On the glasses press **Down** for the menu and choose **Pair phone**: it shows a web address and an 8-character code. On your phone open `https://baroquedub.github.io/cycle-hud/pair.html`, type the code and press **Pair**. The glasses say "Phone paired".
 
-## Pairing your phone (for Spotify and Plex)
+The code is your private channel: only someone who knows it could send settings to your glasses. Press **New code** on the glasses whenever you want a fresh one.
 
-Typing on a phone is far easier than on the glasses, and sign-in tokens must never be committed to a public repo. So the phone page `pair.html` does the sign-in and sends the result to the glasses through a private [ntfy.sh](https://ntfy.sh) topic named after a pairing code. The relay holds each message for up to 12 hours so the glasses can pick it up even if they were asleep; only someone who knows your pairing code could read it.
+### Spotify (Premium needed for the controls)
 
-1. On the glasses: menu → **Pair phone**. You'll see the page address and an 8-character code.
-2. On your phone, open `https://baroquedub.github.io/cycle-hub/pair.html` and enter the code. The glasses say "Phone paired".
+Spotify only lets a hobby app control the account of the person who registered it, so you register a free app of your own. It takes five minutes and is done once.
 
-Anyone who knows the code could send settings to your glasses; press **New code** on the glasses to change it any time.
+1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), sign in and press **Create app**. Name it "CycleHUD". For **Redirect URI** paste the address shown in the Spotify box on the pair page and press **Add**. Tick **Web API** and save. Copy the app's **Client ID**.
+2. Back on the pair page, paste the Client ID into the Spotify box. Make sure CycleHUD is open on the glasses, press **Connect Spotify** and approve.
 
-### Spotify (needs Premium)
+The glasses say "Spotify connected" and the bar shows what is playing on any of your Spotify devices. The sign-in renews itself on the glasses; nothing is stored anywhere else.
 
-Spotify's API requires an app registration (free, 5 minutes). Do this once:
+### Plex / Plexamp (optional)
 
-1. Go to [developer.spotify.com/dashboard](https://developer.spotify.com/dashboard), sign in, **Create app**.
-2. Redirect URI: `https://baroquedub.github.io/cycle-hub/pair.html` (press Add). Tick **Web API**. Save.
-3. Copy the app's **Client ID** into the Spotify box on `pair.html`, make sure Cycle Hub is open on the glasses, and press **Connect Spotify**.
+You need your own Plex Media Server with **Remote Access** on. The Plex box on the pair page explains where to find the server's secure `plex.direct` address and your token. Paste both, press **Test** while Plexamp is playing (it should name the track), then **Send to glasses**.
 
-After you approve, the glasses say "Spotify connected" and the media bar shows what's playing. Controls (Left / Right / Pause) act on whatever device Spotify is playing on. The token refreshes itself on the glasses; if the glasses' storage is wiped by a software update, just press Connect Spotify again.
+Now-playing comes from the server; play, pause and skip are relayed through it to Plexamp. If your server or player does not accept that, the bar still shows what is playing and the glasses say "Plex: control unavailable" when you try to skip.
 
-### Plex / Plexamp
+## Troubleshooting
 
-Your Plex Media Server must have **Remote Access** on, and you need its secure `plex.direct` address plus your token (the Plex box on `pair.html` explains where to find both). Press **Test** while Plexamp is playing: it should show the current track. Then **Send to glasses**.
+- **Location blocked**: allow location for web apps in the Meta AI app, then reopen CycleHUD.
+- **"Reconnecting…" on the music bar**: the phone is offline or asleep; it recovers by itself.
+- **Plex says "player not in server client list"**: bring Plexamp to the foreground on your phone.
+- **Spotify or Plex forgotten after a glasses update**: open the pair page and press **Connect Spotify** / **Send to glasses** again.
+- **Which build is this?** Menu → **Status** shows the version, the location and map state, and what each music source is doing.
 
-Now-playing comes from the server's `/status/sessions`. Transport controls are relayed through the server to the player (`/player/playback/...`). If your server or player doesn't accept that, the bar still shows what's playing and the glasses say "Plex: control unavailable" when you try to skip.
+## Privacy
 
-## Testing on a laptop
+CycleHUD has no accounts and no server of its own. It is a static page served from GitHub Pages. Your location never leaves the glasses except to fetch the map tiles around you (OpenFreeMap, by tile, not by position). Spotify and Plex tokens are stored only on the glasses. The pair page talks to the glasses through a private [ntfy.sh](https://ntfy.sh) topic named by your pairing code; messages are held there for up to 12 hours so the glasses can collect them even if they were asleep, which is why the code should stay private.
+
+<details>
+<summary><b>For developers</b>: how it works, testing on a laptop, hosting your own copy</summary>
+
+### How the heading works
+
+In Facing up the map is rotated so that the direction the bike has just moved points up the screen: the heading is the bearing of your own track over the last dozen metres (fine-tuned to the road it runs along), held when you stop, and picked up again within a few metres of moving off. The glasses' compass is on your head, not the bike, so it never steers the map while riding; once it has calibrated itself against the track it orients the map when the app opens and, at a stop, only after a sustained turn of more than 70 degrees held for several seconds (turning the bike round), never for a glance. The fix's `heading` field is never trusted (the glasses put 0 in every fix). Status → **Send ride log** publishes every fix the app saw to the pair page for replay with `index.html?replay=URL`.
+
+Road data is OpenStreetMap, delivered as [OpenFreeMap](https://openfreemap.org) vector tiles (free, no account). The 3×3 tiles around you (about 4.5 km) are kept loaded and the next ones are fetched as you cross into a new tile; the last set is cached on the glasses so the map draws immediately on the next launch. If a tile can't be fetched, the same area is asked from the Overpass API instead.
+
+Built for the glasses' 600×600 additive display (black is see-through), Neural Band / temple-swipe input (arrow keys + Select), phone-sourced `navigator.geolocation`, and a plain static site: no build step, no framework, no server.
+
+### Testing on a laptop
 
 Serve the folder (for example `python -m http.server 8000` inside it) and open `http://127.0.0.1:8000/index.html?demo` in Chrome with the device toolbar set to 600×600. The demo rides a 2 km loop around Trafalgar Square. Use the arrow keys and Enter for the Neural Band, Escape for Back.
 
-- `&start=LAT,LON` starts the loop somewhere else; `&speed=10` sets the riding speed in metres per second.
-- `pair.html` works from the laptop too, so you can pair, connect Spotify and watch the bar update without the glasses. For Spotify's redirect add `http://127.0.0.1:8000/pair.html` as a second redirect URI in the Spotify app settings (Spotify requires HTTPS or 127.0.0.1).
+- `&start=LAT,LON` starts the loop somewhere else; `&speed=10` sets the riding speed in metres per second. Degradations for the heading estimator (`&noheading`, `&sparse=N`, `&noise=M`, `&late`, `&nots`, `&jump`, `&pause=N`) are described at the top of `geo.js`.
+- `?replay=URL&rate=R` plays a ride log back with the app's clock running at R× real time.
+- `pair.html` works from the laptop too, so you can pair, connect Spotify and watch the bar update without the glasses. For Spotify's redirect add `http://127.0.0.1:8000/pair.html` as a second redirect URI in your Spotify app settings (Spotify requires HTTPS or 127.0.0.1).
 
-## Files
+### Hosting your own copy
+
+1. Fork this repository (or create a new **public** one and push this folder to it, including the hidden `.well-known` folder and the `.nojekyll` file).
+2. **Settings → Pages → Source: Deploy from a branch → main / (root) → Save.**
+3. After a minute the app is live at `https://YOUR-USER.github.io/YOUR-REPO/`. Add it on the glasses as above. The pair page and the Spotify redirect URI follow the new address automatically.
+
+`.nojekyll` matters: without it GitHub Pages hides the `.well-known` folder, and the glasses won't find the app's name and icon.
+
+### Files
 
 ```
 index.html                   glasses screens (map, menu, pair, status) + media bar
 styles.css                   styles for the additive display
-config.js                    non-secret settings (tile source, relay, zoom steps, units)
-geo.js                       geo maths, location watch, demo rider + ride replay, compass (reference), Motion: track → heading
+config.js                    non-secret settings (tile source, relay, zoom steps, units, version)
+geo.js                       geo maths, location watch, demo rider + ride replay, compass (launch only), Motion: track → heading
 mvt.js                       minimal Mapbox Vector Tile decoder
 map.js                       tile loading/caching (OpenFreeMap, Overpass fallback) and canvas drawing
-relay.js                     ntfy.sh listener for messages from pair.html
-media.js                     media bar, polling, marquee, controls
+relay.js                     ntfy.sh listener for messages from pair.html (and ride-log upload the other way)
+media.js                     media bar, polling, marquee, progress line, controls
 media-spotify.js             Spotify Web API source (PKCE refresh)
 media-plex.js                Plex Media Server source
-pair.html                    phone companion page (pairing, Spotify sign-in, Plex setup)
+pair.html                    phone companion page (pairing, Spotify sign-in, Plex setup, ride logs)
+docs/                        README images (card, screenshots, icon, QR)
 favicon.png / manifest.webmanifest / icons/icon.svg / .well-known/meta-wearables-manifest.json
 .nojekyll                    lets GitHub Pages serve .well-known
 ```
 
-Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, tiles by [OpenFreeMap](https://openfreemap.org) © [OpenMapTiles](https://www.openmaptiles.org/).
+</details>
+
+## Licence
+
+Copyright (C) 2026 baroquedub. CycleHUD is free software: you can redistribute it and modify it under the terms of the [GNU Affero General Public License v3.0 or later](LICENSE). It comes with no warranty. If you run a modified copy for other people to use over a network, the AGPL requires you to offer them its source code. Releases up to 0.8.2 (published as "Cycle Hub") were under the MIT licence.
+
+Map data © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, tiles by [OpenFreeMap](https://openfreemap.org) © [OpenMapTiles](https://www.openmaptiles.org/). Spotify and Plex are trademarks of their owners; CycleHUD is not affiliated with Meta, Spotify or Plex.

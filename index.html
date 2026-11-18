@@ -1,14 +1,15 @@
 <!DOCTYPE html>
+<!-- CycleHUD · SPDX-License-Identifier: AGPL-3.0-or-later -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
-  <meta name="description" content="Cycling heads-up hub for Meta Display Glasses: a heading-up street map of where you are with no destination needed, your speed, the time, and a mini player for Spotify or Plexamp.">
+  <meta name="description" content="CycleHUD: a cycling heads-up display for Meta Ray-Ban Display. Your ride. At a glance. A live street map that turns with you, your speed, ride time and a mini player for Spotify or Plexamp.">
   <meta name="mrbd-web-app-capable" content="yes">
-  <meta name="application-name" content="Cycle Hub">
+  <meta name="application-name" content="CycleHUD">
   <meta name="theme-color" content="#000000">
   <meta name="referrer" content="strict-origin-when-cross-origin">
-  <title>Cycle Hub</title>
+  <title>CycleHUD</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
@@ -18,7 +19,7 @@
 
     <!-- ============ MAP (home) ============ -->
     <section id="screen-map" class="screen map-screen" data-screen="map">
-      <button id="map-focus" class="map-focus" aria-label="Map. Select switches between the map and the dashboard, down opens the menu, left and right skip tracks."></button>
+      <button id="map-focus" class="map-focus" aria-label="Map View. Select switches between Map View and Glance View, down opens the menu, left and right skip tracks."></button>
       <canvas id="map" width="600" height="400" aria-hidden="true"></canvas>
 
       <!-- speed dial: a 270-degree gauge arc from 7:30 clockwise over the top to 4:30

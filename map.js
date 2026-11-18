@@ -1,4 +1,5 @@
-/* Cycle Hub — map.js
+/* CycleHUD — map.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * MapData: keeps the road network around you as a set of z14 tiles, decoded
  *          into flat metres relative to a session origin. Primary source is
  *          OpenFreeMap vector tiles (free, no key, CDN-cached); if a tile
@@ -377,7 +378,7 @@
     lastFrameMs: 0,
     riderXY: [300, 320],   // recomputed from the canvas size on every draw
     stale: false,          // last fix suspect: drawn dim until a new one lands
-    stoppedAt: 0,          // when drawing stopped (menu, dash view, display off)
+    stoppedAt: 0,          // when drawing stopped (menu, Glance View, display off)
     resumeAt: 0,           // when drawing came back after a long absence
 
     init(canvas) { MapView.canvas = canvas; },
@@ -439,7 +440,7 @@
 
       const fix = MapView.fix;
       const settled = CH.Motion.step(now);
-      // Out-of-date position (display was off, or the dash view was up): the
+      // Out-of-date position (display was off, or the Glance View was up): the
       // tiles are where you were, not where you are. Dim and pulse until a
       // fresh fix lands.
       const stale = MapView.isStale(now);

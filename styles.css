@@ -1,4 +1,5 @@
-/* Cycle Hub — styled for the Meta Ray-Ban Display (600×600, additive light).
+/* CycleHUD — styled for the Meta Ray-Ban Display (600×600, additive light).
+   SPDX-License-Identifier: AGPL-3.0-or-later
    Black (#000) is transparent to the wearer, so the page is pure black and
    only the information you need is lit. UI surfaces use dark greys so they
    still read as panels. */
@@ -15,7 +16,7 @@
   --warn: #ffb547;
   --danger: #ff6b6b;
   --ok: #4cd97b;
-  --dash-dim: 0.45;      /* brightness of the speed / media / clock row in the dash view */
+  --dash-dim: 0.45;      /* brightness of the speed / media / clock row in the Glance View */
   --radius: 16px;
 }
 
@@ -96,7 +97,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 /* ride time: moving time only (app.js RideTime). Map view: a small right-aligned
    block beside the clock (x 459 is 12 px left of the clock pill); each .ride-row
    is label + value so a second row (time to destination) can join later.
-   Dash view: the value alone sits under the time inside the clock pill. */
+   Glance View: the value alone sits under the time inside the clock pill. */
 .ride {
   position: absolute; z-index: 2;
   top: 24px; height: 64px; right: 141px;
@@ -169,7 +170,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .media-artist { font-size: 16px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .media-ctl { flex: 0 0 auto; display: flex; gap: 14px; font-size: 22px; color: var(--text-2); }
 
-/* dash view (Enter on the main screen): no map; the media bar stays where it is
+/* Glance View (Enter on the main screen): no map; the media bar stays where it is
    and the speed dial and clock drop down beside it, all dimmed to --dash-dim.
    The row is centred on y = 452 (the bar's middle); notices stay full brightness. */
 .map-screen.dash #map { display: none; }

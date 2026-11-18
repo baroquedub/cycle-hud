@@ -1,9 +1,10 @@
-/* Cycle Hub — app.js
+/* CycleHUD — app.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Boot, settings, screens + history (the glasses' Back calls history.back()),
  * focus movement, key routing, menu, clock, pills, pairing, status, wake lock.
  *
  * Input: the Neural Band / temple swipes send ArrowUp/Down/Left/Right + Enter.
- * Main screen: Enter map/dash view · Down menu · Left/Right previous/next track.
+ * Main screen: Enter Map View / Glance View (dash) · Down menu · Left/Right previous/next track.
  * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7; degradations in
  * geo.js), or ?replay=URL to play a ride log back.
  */
@@ -278,7 +279,7 @@
     sendingLog = true;
     toast('Sending ride log…', 30000);
     try {
-      const name = 'cyclehub-ride-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+      const name = 'cyclehud-ride-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
       await Relay.upload(name, Motion.exportLog());
       toast('Ride log sent · pair.html on your phone lists it', 5000);
     } catch (e) { toast('Could not send the log: ' + (e && e.name === 'AbortError' ? 'timeout' : (e && e.message) || 'error'), 5000); }
@@ -513,7 +514,7 @@
       ['Spotify', CH.SpotifySource.statusText()],
       ['Plex', CH.PlexSource.statusText()],
       ['Wake lock', wakeLock ? 'held' : 'not held'],
-      ['Version', CFG.VERSION + ' · map data © OpenStreetMap contributors'],
+      ['Version', CFG.VERSION + ' · AGPL-3.0 · github.com/baroquedub/cycle-hud · map data © OpenStreetMap contributors'],
     ];
     $('status-list').innerHTML = rows.map(([k, v]) => `<div class="kv-row"><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('');
     $('btn-locretry').hidden = CH.DEMO;
@@ -562,7 +563,7 @@
     updateGpsPill(); updateMapPill(); updateDebug();
     if (CH.REPLAY) toast('Replaying a ride log', 3000);
     else if (CH.DEMO) toast('Demo: riding a loop at ' + fmtSpeed(Sim.speed) + ' ' + unitLabel(), 3000);
-    console.info('Cycle Hub', CFG.VERSION, CH.DEMO ? '[demo]' : '');
+    console.info('CycleHUD', CFG.VERSION, CH.DEMO ? '[demo]' : '');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();

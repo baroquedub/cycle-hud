@@ -1,4 +1,5 @@
-/* Cycle Hub — geo.js
+/* CycleHUD — geo.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Geo maths, the phone-sourced location watch, the demo rider and ride
  * replay, the compass (shown for reference only) and Motion: the estimator
  * that turns the rider's own track into the heading the map rotates to.
@@ -169,7 +170,7 @@
       Loc.checkPermission();
     },
 
-    // Back from a long absence (display off, dash view): make sure a fix is on its way.
+    // Back from a long absence (display off, Glance View): make sure a fix is on its way.
     refresh() {
       if (SIM || !Loc.started || Loc.fresh(30000)) return;
       Loc.fails = 0;

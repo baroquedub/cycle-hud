@@ -1,4 +1,5 @@
-/* Cycle Hub — media.js
+/* CycleHUD — media.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * The mini player bar: polls the chosen source, shows title/artist with a
  * marquee only when the title overflows, and sends transport commands.
  */
@@ -149,7 +150,7 @@
       bar.classList.toggle('dim', L.state !== 'ok');
     },
 
-    // The bar changes width between the map and dash views.
+    // The bar changes width between the map and Glance views.
     remeasure() { const t = $('media-title'); Media.marquee(t, t.textContent); },
 
     // Animate only when the text overflows its box; otherwise sit still.

@@ -1,16 +1,17 @@
 // =====================================================================
-//  Cycle Hub settings — non-secret defaults only. Safe to commit.
+//  CycleHUD settings — non-secret defaults only. Safe to commit.
+//  SPDX-License-Identifier: AGPL-3.0-or-later
 //  Secrets (Spotify refresh token, Plex token) never live here: they are
 //  sent from pair.html to the glasses over the relay and kept in the
 //  glasses' localStorage.
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.8.2',
+  VERSION: '0.9.0',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
-  RELAY_PREFIX: 'cyclehub-',
+  RELAY_PREFIX: 'cyclehud-',
 
   // Road data: OpenFreeMap vector tiles (free, no key, CDN). The 3x3 tiles
   // around you are kept loaded; at zoom 14 a tile is about 1.5 km across.

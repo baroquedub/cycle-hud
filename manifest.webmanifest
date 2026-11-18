@@ -1,6 +1,6 @@
 {
-  "name": "Cycle Hub",
-  "short_name": "Cycle Hub",
+  "name": "CycleHUD",
+  "short_name": "CycleHUD",
   "icons": [
     { "src": "favicon.png", "sizes": "128x128", "type": "image/png" }
   ],

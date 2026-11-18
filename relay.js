@@ -1,4 +1,5 @@
-/* Cycle Hub — relay.js
+/* CycleHUD — relay.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * pair.html on your phone publishes to a private ntfy.sh topic named after
  * your pairing code; the glasses listen on the same topic. Adapted from
  * Waypoint. Payloads: {ping}, {spotify:{...}}, {plex:{...}}. The glasses

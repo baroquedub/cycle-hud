@@ -1,4 +1,5 @@
-/* Cycle Hub — mvt.js
+/* CycleHUD — mvt.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * A minimal Mapbox Vector Tile (protobuf) decoder: just enough to pull line
  * features and their properties out of the layers we ask for. No dependencies.
  */

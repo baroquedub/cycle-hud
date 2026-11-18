@@ -1,11 +1,12 @@
 <!doctype html>
+<!-- CycleHUD · SPDX-License-Identifier: AGPL-3.0-or-later -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0f1216">
   <meta name="referrer" content="no-referrer">
-  <title>Cycle Hub – Pair phone</title>
+  <title>CycleHUD – Pair phone</title>
   <link rel="icon" type="image/png" href="favicon.png">
   <style>
     :root { --bg: #0f1216; --card: #171c22; --card-2: #1f262e; --text: #f2f5f7; --dim: #8d98a3; --accent: #4fe3c1; --ok: #4cd97b; --warn: #ffb547; --danger: #ff6b6b; }
@@ -35,7 +36,7 @@
   </style>
 </head>
 <body>
-  <h1>Cycle Hub · Pair phone</h1>
+  <h1>CycleHUD · Pair phone</h1>
 
   <!-- ============ PAIRING ============ -->
   <section class="card">
@@ -46,7 +47,7 @@
       <button class="btn secondary" id="pair-ping">Test</button>
     </div>
     <div id="pair-new">
-      <p class="hint">On the glasses open Cycle Hub, press Enter for the menu, choose <b>Pair phone</b>, and type the code shown:</p>
+      <p class="hint">On the glasses open CycleHUD, press Down for the menu, choose <b>Pair phone</b>, and type the code shown:</p>
       <input id="code-input" type="text" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="9" placeholder="ABCD-EFGH">
       <button class="btn" id="pair-save" disabled>Save</button>
     </div>
@@ -65,9 +66,9 @@
       <summary>How to create the Spotify developer app</summary>
       <ol>
         <li>Go to <b>developer.spotify.com/dashboard</b>, sign in with your Spotify account, and press <b>Create app</b>.</li>
-        <li>Name: anything (e.g. Cycle Hub). Redirect URI: <code id="sp-redirect"></code> (press <b>Add</b>). API: tick <b>Web API</b>. Save.</li>
+        <li>Name: anything (e.g. CycleHUD). Redirect URI: <code id="sp-redirect"></code> (press <b>Add</b>). API: tick <b>Web API</b>. Save.</li>
         <li>Open the app's <b>Settings</b> and copy the <b>Client ID</b> into the box above.</li>
-        <li>Have Cycle Hub open on the glasses, then press <b>Connect Spotify</b>. After you approve, this page sends the token to the glasses and they show "Spotify connected".</li>
+        <li>Have CycleHUD open on the glasses, then press <b>Connect Spotify</b>. After you approve, this page sends the token to the glasses and they show "Spotify connected".</li>
       </ol>
     </details>
   </section>
@@ -205,7 +206,7 @@
         if (!res.ok || !j.refresh_token) throw new Error(j.error_description || j.error || ('HTTP ' + res.status));
         const payload = { spotify: { clientId, refreshToken: j.refresh_token, accessToken: j.access_token || '', expiresAt: Date.now() + (j.expires_in || 3600) * 1000 } };
         const ok = await send(payload, true);
-        setStatus('sp-status', ok ? 'Sent to the glasses. They should say "Spotify connected".' : 'Signed in, but the glasses relay did not answer. Open Cycle Hub on the glasses and press Connect Spotify again.', ok ? 'ok' : 'warn');
+        setStatus('sp-status', ok ? 'Sent to the glasses. They should say "Spotify connected".' : 'Signed in, but the glasses relay did not answer. Open CycleHUD on the glasses and press Connect Spotify again.', ok ? 'ok' : 'warn');
       } catch (e) { setStatus('sp-status', 'Spotify sign-in failed: ' + e.message, 'bad'); }
     }
 

@@ -1,4 +1,5 @@
-/* Cycle Hub — media-spotify.js
+/* CycleHUD — media-spotify.js
+ * SPDX-License-Identifier: AGPL-3.0-or-later
  * Spotify Web API source. Credentials {clientId, refreshToken, accessToken,
  * expiresAt} arrive from pair.html (PKCE flow on your phone) and live in
  * localStorage 'ch.spotify'. PKCE refresh tokens rotate, so every refresh
