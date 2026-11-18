@@ -41,12 +41,12 @@ Runs on **Meta Ray-Ban Display** glasses as a web app: nothing to install on you
 | Where | Controls |
 |---|---|
 | Map View / Glance View | **Select** switches between Map View and Glance View · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
-| Menu | **‹ Play/Pause ›** · **Zoom** Normal / Close · **Map** Facing up / North up · **Units** mph / km/h · **Media** Auto / Spotify / Plex / Off · **Pair phone** · **Status** |
+| Menu | **‹ Play/Pause ›** · **Zoom** Normal / Close · **Map** Facing up / North up · **Units** mph / km/h · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
 
 <table>
 <tr>
 <td width="33%"><img src="docs/ss-2.jpg" alt="Glance View: speed dial, music bar and clock on one row, no map" width="100%"></td>
-<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: play, previous, next, zoom, map mode, units, media source, pair phone, status" width="100%"></td>
+<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: play, previous, next, zoom, map mode, units, audio source, pair phone, status" width="100%"></td>
 <td width="33%"><img src="docs/ss-4.jpg" alt="Pair phone screen showing the pairing address and an 8-character code" width="100%"></td>
 </tr>
 <tr>
@@ -58,7 +58,7 @@ Runs on **Meta Ray-Ban Display** glasses as a web app: nothing to install on you
 
 - **Facing up** rotates the map so the direction you have just moved points up the screen; **North up** keeps the map still and turns the arrow. The map holds its heading while you wait at a junction and picks the new direction up within a few metres of moving off.
 - Speed and ride time come from the phone's GPS. The speed dims after 5 s without a fix and shows `--` after 15 s.
-- The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge. **Media: Auto** shows whichever one is playing.
+- The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge. **Audio: Auto** (the default) shows whichever one is playing; **Audio: None** hides the bar in both views.
 
 ## Pair your phone (needed for music)
 

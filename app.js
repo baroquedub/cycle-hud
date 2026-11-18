@@ -27,7 +27,7 @@
     units: store.get('units', CFG.DEFAULT_UNITS),         // 'mph' | 'kmh'
     mapMode: store.get('mapMode', 'auto'),                 // 'auto' (facing up) | 'north'
     view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock on the media bar's row, dimmed)
-    media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off'
+    media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off' (shown as Audio: None; the bar is hidden)
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
     debug: store.get('debug', false),                      // on-map readout (bottom band), toggled on the Status screen
   };
@@ -307,7 +307,7 @@
   }
 
   function mediaAct(name) {
-    if (settings.media === 'off') { if (name !== 'toggle') toast('Media is off — Menu → Media', 2000); return; }
+    if (settings.media === 'off') { if (name !== 'toggle') toast('Audio is set to None — Menu → Audio', 2000); return; }
     Media.act(name);
   }
 
@@ -322,7 +322,7 @@
     $('row-units').textContent = 'Units: ' + unitLabel();
     $('row-mapmode').textContent = 'Map: ' + mapModeLabel();
     $('row-zoom').textContent = 'Zoom: ' + CFG.ZOOM_LABELS[MapView.zoom];
-    $('row-media').textContent = 'Media: ' + ({ auto: 'Auto', spotify: 'Spotify', plex: 'Plex', off: 'Off' })[settings.media];
+    $('row-media').textContent = 'Audio: ' + ({ auto: 'Auto', spotify: 'Spotify', plex: 'Plex', off: 'None' })[settings.media];
   }
   Media.onState = () => { if (current === 'menu') renderMenu(); };
 
@@ -511,7 +511,7 @@
       ['Map fetch', MapData.status + (MapData.error ? ' · ' + MapData.error : '')],
       ['Draw', MapView.frames + ' frames · last ' + MapView.lastFrameMs.toFixed(1) + ' ms · zoom ' + MapView.metresPerPx() + ' m/px'],
       ['Relay', (Relay.connected ? 'connected' : 'not connected') + ' · code ' + Relay.pretty()],
-      ['Media', Media.statusText()],
+      ['Audio', Media.statusText()],
       ['Spotify', CH.SpotifySource.statusText()],
       ['Plex', CH.PlexSource.statusText()],
       ['Wake lock', wakeLock ? 'held' : 'not held'],

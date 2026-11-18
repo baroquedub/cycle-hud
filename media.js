@@ -10,7 +10,7 @@
   const $ = (id) => document.getElementById(id);
 
   const Media = {
-    sourceKey: 'off',    // 'auto' | 'spotify' | 'plex' | 'off'
+    sourceKey: 'off',    // 'auto' | 'spotify' | 'plex' | 'off' (Audio: None - the bar is hidden in both views)
     source: null,        // the source being shown and controlled
     other: null,         // in auto: the other paired source, checked when this one isn't playing
     pollId: 0,           // bumps whenever a poll result would be stale (source change, page woke up)
@@ -169,7 +169,7 @@
 
     async act(name) {
       const src = Media.source;
-      if (!src) { Media.toast('Media is off'); return; }
+      if (!src) { Media.toast('Audio is set to None'); return; }
       if (Media.last.state === 'auth') { Media.toast(src.label + ' not connected — ' + Media.connectHint(src)); return; }
       if (!src.canControl) { Media.toast(src.label + ': control unavailable'); return; }
       if (name === 'toggle') name = Media.last.playing ? 'pause' : 'play';
@@ -204,7 +204,7 @@
       return paired ? 'On the pair page press ' + btn : 'Menu → Pair phone, then ' + btn;
     },
     statusText() {
-      if (Media.sourceKey === 'off') return 'off';
+      if (Media.sourceKey === 'off') return 'none';
       const s = Media.source ? Media.source.statusText() : '';
       const age = Media.lastPollAt ? Math.round((Date.now() - Media.lastPollAt) / 1000) + ' s ago' : 'never';
       return Media.sourceKey + (Media.other && Media.source ? ' (' + Media.source.key + ')' : '') + ' · ' + Media.last.state + ' · polled ' + age + (s ? ' · ' + s : '');
