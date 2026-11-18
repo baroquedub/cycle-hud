@@ -6,7 +6,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.8.0',
+  VERSION: '0.8.1',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -118,9 +118,10 @@ window.CH.CONFIG = {
   DEFAULT_UNITS: 'mph',     // 'mph' or 'kmh'
 
   // The speed dial's 270-degree gauge arc (7:30 clockwise over the top to
-  // 4:30) is full at this speed: 11.2 m/s = 25 mph = 40 km/h, the scale of
-  // the VELO speedometer it is modelled on. Cruising at 10-18 mph shows
-  // roughly the left half of the sweep.
+  // 4:30) is full, and red, at this speed: 11.2 m/s = 25 mph = 40 km/h, the
+  // scale of the VELO speedometer it is modelled on. The arc runs white ->
+  // yellow -> orange -> red along the sweep; cruising at 10-18 mph shows
+  // roughly the left half (white into yellow).
   SPEED_GAUGE_FULL_MPS: 11.2,
 
   // Spotify scopes needed for now-playing + transport controls.

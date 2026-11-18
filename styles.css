@@ -15,8 +15,7 @@
   --warn: #ffb547;
   --danger: #ff6b6b;
   --ok: #4cd97b;
-  --gauge: #ffd666;      /* speed dial arc (the warm yellow of the VELO gauge it is modelled on) */
-  --dash-dim: 0.55;      /* brightness of the speed / media / clock row in the dash view */
+  --dash-dim: 0.45;      /* brightness of the speed / media / clock row in the dash view */
   --radius: 16px;
 }
 
@@ -71,31 +70,47 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   pointer-events: none;
   transition: opacity 300ms cubic-bezier(0.4, 0.04, 0.5, 1);
 }
-/* speed dial: a disc with a 270-degree gauge arc round its edge (7:30 clockwise
-   over the top to 4:30, the bottom open), full at SPEED_GAUGE_FULL_MPS. The
-   circle's circumference is 2 * pi * 54 = 339.3; three quarters of it = 254.5. */
+/* speed dial: a 100 px disc with a 270-degree gauge arc round its edge (7:30
+   clockwise over the top to 4:30, the bottom open), full and red at
+   SPEED_GAUGE_FULL_MPS. The SVG is drawn in a 120 unit box (circle r = 54,
+   circumference 339.3, three quarters = 254.5) and scaled down. The 12 px top
+   padding sets the number level with the clock's digits (y = 56), unit beneath. */
 .pill.speed {
-  top: 24px; left: 24px;
-  width: 120px; height: 120px; padding: 0;
+  top: 10px; left: 24px;
+  width: 100px; height: 100px; padding: 12px 0 0;
   border-radius: 50%;
   flex-direction: column; justify-content: center; gap: 0;
 }
 .speed-gauge { position: absolute; inset: 0; width: 100%; height: 100%; }
-.gauge-track { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 254.5 339.3; }
-.gauge-fill {
-  fill: none; stroke: var(--gauge); stroke-width: 4; stroke-linecap: round;
-  stroke-dasharray: 339.3; stroke-dashoffset: 339.3;      /* app.js: offset = 339.3 * (1 - 0.75 * fraction) */
-  transition: stroke-dashoffset 700ms ease-out;
-}
-.gauge-dot { fill: var(--gauge); }
-.gauge-dot.tip { transition: cx 700ms ease-out, cy 700ms ease-out; }
-.speed-val { position: relative; font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.gauge-track { fill: none; stroke: var(--line); stroke-width: 4; stroke-linecap: butt; stroke-dasharray: 254.5 339.3; }
+/* the arc itself: 27 short segments (app.js buildGauge), each its own colour on
+   the white -> yellow -> orange -> red run, revealed in turn as the speed rises */
+.gauge-seg { fill: none; stroke-width: 4; stroke-linecap: butt; transition: stroke-dasharray 700ms ease-out; }
+.speed-val { position: relative; font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
 .speed-unit { position: relative; font-size: 13px; color: var(--dim); margin-top: 2px; }
 .pill.dim .speed-val { color: var(--dim); }
-.pill.dim .gauge-fill { stroke: var(--dim); }
-.pill.dim .gauge-dot { fill: var(--dim); }
+.pill.dim .gauge-seg { stroke: var(--dim) !important; }
 
 .pill.clock { top: 24px; right: 24px; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ride time: moving time only (app.js RideTime). Map view: a small right-aligned
+   block beside the clock (x 459 is 12 px left of the clock pill); each .ride-row
+   is label + value so a second row (time to destination) can join later.
+   Dash view: the value alone sits under the time inside the clock pill. */
+.ride {
+  position: absolute; z-index: 2;
+  top: 24px; height: 64px; right: 141px;
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px;
+  pointer-events: none;
+}
+.ride-row { display: flex; gap: 8px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.ride-label { text-transform: uppercase; letter-spacing: 0.06em; }
+.clock-ride { display: none; font-size: 13px; font-weight: 400; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.ride-val.paused { animation: ridepulse 1.6s ease-in-out infinite; }   /* stopped mid-ride: the count waits, pulsing */
+@keyframes ridepulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
 
 .pill.notice {
   height: 44px; padding: 0 16px;
@@ -106,9 +121,9 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .pill.notice.gps { top: 100px; color: var(--warn); }
 .pill.notice.mapmsg { top: 150px; color: var(--text-2); }
 
-/* on-map debug readout (Status -> Debug), sits between the speed and clock pills */
+/* on-map debug readout (Status -> Debug, off by default): bottom band, under the media bar */
 .pill.debug {
-  top: 24px; left: 50%; transform: translateX(-50%);
+  top: 504px; left: 50%; transform: translateX(-50%);
   height: 64px; padding: 0 12px;
   flex-direction: column; justify-content: center; gap: 3px;
   font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums;
@@ -158,9 +173,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
    and the speed dial and clock drop down beside it, all dimmed to --dash-dim.
    The row is centred on y = 452 (the bar's middle); notices stay full brightness. */
 .map-screen.dash #map { display: none; }
-.map-screen.dash .media-bar { left: 160px; right: 152px; }
-.map-screen.dash .pill.speed { top: 392px; }
-.map-screen.dash .pill.clock { top: 420px; }
+.map-screen.dash .media-bar { left: 140px; right: 152px; }
+.map-screen.dash .pill.speed { top: 402px; }
+.map-screen.dash .pill.clock { top: 420px; flex-direction: column; justify-content: center; gap: 0; line-height: 1; }
+.map-screen.dash .clock-ride { display: block; margin-top: 2px; }   /* ride time under the time, like mph under the speed */
+.map-screen.dash .ride { display: none; }
 .map-screen.dash .pill.speed, .map-screen.dash .pill.clock, .map-screen.dash .media-bar { opacity: var(--dash-dim); }
 
 /* ---------- menu ---------- */

@@ -28,7 +28,7 @@
     view: store.get('view', 'map'),                        // 'map' | 'dash' (no map: speed, media, clock on the media bar's row, dimmed)
     media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off'
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
-    debug: store.get('debug', true),                       // on-map readout, toggled on the Status screen
+    debug: store.get('debug', false),                      // on-map readout (bottom band), toggled on the Status screen
   };
   if (!['mph', 'kmh'].includes(settings.units)) settings.units = CFG.DEFAULT_UNITS;
   if (!['auto', 'north'].includes(settings.mapMode)) settings.mapMode = 'auto';
@@ -53,9 +53,69 @@
     const v = settings.units === 'mph' ? mps * 2.236936 : mps * 3.6;
     return v.toFixed(1);                        // always one decimal: cyclists read 14.2, not 14
   }
-  // Speed dial gauge: a circle of radius 54 in a 120 x 120 viewBox, its path
-  // rotated to start at 7:30 and sweep 270 degrees clockwise (index.html).
-  const GAUGE_R = 54, GAUGE_C = 2 * Math.PI * GAUGE_R, GAUGE_START_DEG = 135, GAUGE_SWEEP_DEG = 270;
+  // Speed dial gauge: a circle of radius 54 in a 120 x 120 viewBox, rotated so
+  // its path starts at 7:30 and sweeps 270 degrees clockwise (index.html). The
+  // arc is GAUGE_SEGS short segments of 10 degrees (overlapping 0.4 degrees so
+  // no seams show), each coloured from the white -> yellow -> orange -> red
+  // run by its position; updateSpeedPill reveals them in turn.
+  const GAUGE_R = 54, GAUGE_C = 2 * Math.PI * GAUGE_R, GAUGE_SWEEP_DEG = 270;
+  const GAUGE_SEGS = 27, SEG_DEG = GAUGE_SWEEP_DEG / GAUGE_SEGS, SEG_OVERLAP = 0.4;
+  const SEG_LEN = GAUGE_C * (SEG_DEG + SEG_OVERLAP) / 360;
+  const GAUGE_STOPS = [[255, 255, 255], [255, 214, 102], [255, 140, 50], [255, 59, 59]];
+  let gaugeSegs = [];
+  function gaugeColour(f) {                       // f 0..1 along the sweep
+    const p = Math.min(0.9999, Math.max(0, f)) * (GAUGE_STOPS.length - 1), i = Math.floor(p), t = p - i;
+    const a = GAUGE_STOPS[i], b = GAUGE_STOPS[i + 1];
+    return 'rgb(' + a.map((v, k) => Math.round(v + (b[k] - v) * t)).join(',') + ')';
+  }
+  function buildGauge() {
+    const g = $('speed-arc'), NS = 'http://www.w3.org/2000/svg';
+    const pt = (deg) => { const r = deg * Math.PI / 180; return (60 + GAUGE_R * Math.cos(r)).toFixed(2) + ' ' + (60 + GAUGE_R * Math.sin(r)).toFixed(2); };
+    gaugeSegs = [];
+    for (let i = 0; i < GAUGE_SEGS; i++) {
+      const a0 = i * SEG_DEG, a1 = a0 + SEG_DEG + SEG_OVERLAP;
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('class', 'gauge-seg');
+      p.setAttribute('d', 'M ' + pt(a0) + ' A ' + GAUGE_R + ' ' + GAUGE_R + ' 0 0 1 ' + pt(a1));
+      p.style.stroke = gaugeColour((a0 + SEG_DEG / 2) / GAUGE_SWEEP_DEG);
+      p.style.strokeDasharray = '0 999';
+      g.appendChild(p);
+      gaugeSegs.push(p);
+    }
+  }
+
+  // Ride time: how long the bike has been moving since the app was opened. It
+  // runs while Motion has confirmed movement and the shown speed is above
+  // zero (so a stop at a light pauses it the moment the dial reads 0.0, a few
+  // seconds before the heading logic declares the hold). Nothing is persisted:
+  // a fresh launch starts from 00:00, a sleeping display keeps the count.
+  const RideTime = {
+    acc: 0, since: null, started: false,
+    running() { return Motion.moving && Motion.speed >= 0.05; },   // 0.05 m/s = the dial's smallest non-zero reading
+    update(now) {
+      const run = RideTime.running();
+      if (run && RideTime.since == null) { RideTime.since = now; RideTime.started = true; }
+      else if (!run && RideTime.since != null) { RideTime.acc += now - RideTime.since; RideTime.since = null; }
+    },
+    ms(now = CH.clock()) { return RideTime.acc + (RideTime.since != null ? now - RideTime.since : 0); },
+    paused() { return RideTime.started && !RideTime.running(); },
+  };
+  CH.RideTime = RideTime;
+  function fmtRide(ms) {
+    const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = s % 60;
+    const mm = (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+    return h ? h + ':' + mm : mm;
+  }
+  function renderRide() {
+    const now = CH.clock();
+    RideTime.update(now);
+    const text = fmtRide(RideTime.ms(now)), paused = RideTime.paused();
+    for (const id of ['ride-val', 'clock-ride']) {
+      const el = $(id);
+      if (el.textContent !== text) el.textContent = text;
+      el.classList.toggle('paused', paused);
+    }
+  }
   const unitLabel = () => settings.units === 'mph' ? 'mph' : 'km/h';
   function fmtClock(d) {
     const h = d.getHours(), m = d.getMinutes();
@@ -236,7 +296,7 @@
     $('screen-map').classList.toggle('dash', settings.view === 'dash');
     MapView.enabled = current === 'map' && settings.view === 'map';
     if (MapView.enabled) { if (MapView.resume()) Loc.refresh(); } else MapView.stop();
-    Media.remeasure();
+    Media.remeasure(); renderRide();
     updateDebug(); updateGpsPill(); updateMapPill();
   }
   function toggleView() {
@@ -294,7 +354,7 @@
   // ------------------------------------------------------------------ clock + pills
   function tickClock() {
     const now = new Date();
-    $('clock').textContent = fmtClock(now);
+    $('clock-time').textContent = fmtClock(now);
     setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
   }
 
@@ -303,13 +363,13 @@
     const stale5 = Motion.speedStale(5000), stale15 = Motion.speedStale(15000);
     $('speed-val').textContent = stale15 ? '--' : fmtSpeed(Motion.speed);
     pill.classList.toggle('dim', stale5 && !stale15);
-    // gauge arc: the first frac x 270 degrees of the circle, and the dot at its tip
+    // gauge arc: reveal the first frac x 270 degrees, segment by segment
     const frac = stale15 || !G.finite(Motion.speed) ? 0 : Math.min(1, Math.max(0, Motion.speed / CFG.SPEED_GAUGE_FULL_MPS));
-    $('speed-arc').style.strokeDashoffset = (GAUGE_C * (1 - 0.75 * frac)).toFixed(1);
-    const a = (GAUGE_START_DEG + GAUGE_SWEEP_DEG * frac) * Math.PI / 180;   // SVG angle: clockwise from 3 o'clock
-    const tip = $('speed-tip').style;
-    tip.cx = (60 + GAUGE_R * Math.cos(a)).toFixed(1) + 'px';
-    tip.cy = (60 + GAUGE_R * Math.sin(a)).toFixed(1) + 'px';
+    const sweep = frac * GAUGE_SWEEP_DEG;
+    gaugeSegs.forEach((p, i) => {
+      const vis = Math.min(SEG_DEG + SEG_OVERLAP, Math.max(0, sweep - i * SEG_DEG)) / (SEG_DEG + SEG_OVERLAP) * SEG_LEN;
+      p.style.strokeDasharray = vis.toFixed(2) + ' 999';
+    });
   }
 
   function updateGpsPill() {
@@ -358,7 +418,7 @@
     if (document.visibilityState === 'hidden') return;
     Motion.tick(CH.clock());                       // compass-at-rest rules keep running if the phone goes quiet
     if (current !== 'map') return;
-    updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug();
+    updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); renderRide();
     Media.renderProgress();                        // the track progress line creeps between polls
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
     if (MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
@@ -370,7 +430,8 @@
     if (!MapData.origin) MapData.tryCache(fix);
     MapData.update(fix);
     MapView.setFix(fix);
-    if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); }
+    RideTime.update(CH.clock());                   // catch the moving / stopped edge on the fix itself
+    if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); renderRide(); }
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
   Motion.onChange = () => { if (MapView.enabled) MapView.requestDraw(); if (current === 'map') updateDebug(); };
@@ -438,6 +499,7 @@
       ['Last fix', f ? ago(f.t) + (f.ts ? ' (position ' + ago(f.ts) + ')' : '') + ' · ±' + Math.round(f.accuracy) + ' m' : 'none'],
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
+      ['Ride time', fmtRide(RideTime.ms()) + (RideTime.paused() ? ' · paused' : RideTime.running() ? ' · moving' : ' · not started')],
       ['Heading', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · from ' + Motion.courseSrc + (Motion.road ? ' (' + Math.round(Motion.road.dist) + ' m away)' : '') + ' · ' + (Motion.moving ? 'moving' : 'held')],
       ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m'],
       ['Compass', Motion.calText() + ' · orients the map at launch and on a sustained turn while stopped'],
@@ -488,6 +550,7 @@
     // prompt needs a user gesture the first attempt fails, so ask again on the
     // first key press.
     Compass.request().then((ok) => { if (!ok) document.addEventListener('keydown', () => { Compass.request(); }, { once: true }); });
+    buildGauge();
     applyUnits();
     history.replaceState({ s: 'map', d: 0 }, '', location.pathname + location.search + '#map');
     render('map');

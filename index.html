@@ -22,20 +22,23 @@
       <canvas id="map" width="600" height="400" aria-hidden="true"></canvas>
 
       <!-- speed dial: a 270-degree gauge arc from 7:30 clockwise over the top to 4:30
-           (the <g> rotation puts the circle's start at 7:30), a dot riding its tip -->
+           (the <g> rotation puts the circle's start at 7:30); app.js fills #speed-arc
+           with short coloured segments (white -> yellow -> orange -> red) at boot -->
       <div class="pill speed" id="speed-pill" aria-live="off">
         <svg class="speed-gauge" viewBox="0 0 120 120" aria-hidden="true">
           <g transform="rotate(135 60 60)">
             <circle class="gauge-track" cx="60" cy="60" r="54"/>
-            <circle class="gauge-fill" id="speed-arc" cx="60" cy="60" r="54"/>
+            <g id="speed-arc"></g>
           </g>
-          <circle class="gauge-dot" cx="21.8" cy="98.2" r="3"/>
-          <circle class="gauge-dot tip" id="speed-tip" cx="21.8" cy="98.2" r="4.5"/>
         </svg>
         <span class="speed-val" id="speed-val">--</span>
         <span class="speed-unit" id="speed-unit">mph</span>
       </div>
-      <div class="pill clock" id="clock">--:--</div>
+      <div class="pill clock" id="clock"><span id="clock-time">--:--</span><span class="ride-val clock-ride" id="clock-ride">00:00</span></div>
+      <!-- ride time (moving time only), beside the clock in map view; room for a second row -->
+      <div class="ride" id="ride-rows" aria-live="off">
+        <div class="ride-row"><span class="ride-label">Ride time</span><span class="ride-val" id="ride-val">00:00</span></div>
+      </div>
       <div class="pill debug" id="debug-pill" hidden aria-hidden="true"></div>
       <div class="pill notice gps" id="gps-pill" hidden>Waiting for GPS</div>
       <div class="pill notice mapmsg" id="map-pill" hidden>Loading map…</div>
