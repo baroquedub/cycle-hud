@@ -170,11 +170,15 @@
       Loc.checkPermission();
     },
 
-    // Back from a long absence (display off, Glance View): make sure a fix is on its way.
+    // The map is back on show with an old fix (display was off, or the phone
+    // went quiet while another screen was up): make sure a fix is on its way.
+    // Nothing for 30 s = restart the watch; otherwise ask the phone for a
+    // position right now, because at a standstill it may not send one by itself.
     refresh() {
-      if (SIM || !Loc.started || Loc.fresh(30000)) return;
-      Loc.fails = 0;
-      Loc.startWatch();
+      if (SIM || !Loc.started) return;
+      if (!Loc.fresh(30000)) { Loc.fails = 0; Loc.startWatch(); return; }
+      if (Loc.fresh(CH.CONFIG.STALE_FIX_MS)) return;
+      try { navigator.geolocation.getCurrentPosition(Loc.onFix, () => {}, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }); } catch { /* ignore */ }
     },
 
     restart() {

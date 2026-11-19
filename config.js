@@ -7,7 +7,7 @@
 // =====================================================================
 window.CH = window.CH || {};
 window.CH.CONFIG = {
-  VERSION: '0.9.2',
+  VERSION: '0.10.0',
 
   // Relay used by "Pair phone" (free, no account). Topic = RELAY_PREFIX + pairing code.
   RELAY_URL: 'https://ntfy.sh',
@@ -29,10 +29,10 @@ window.CH.CONFIG = {
   OVERPASS_TIMEOUT_MS: 20000,
 
   // Metres per CSS pixel for each zoom step (600 px = 1.2 / 2.4 km across),
-  // chosen from the menu's Zoom row.
+  // toggled with Up on the main screen or the menu's Zoom row.
   ZOOMS: [2, 4],
-  ZOOM_LABELS: ['Close', 'Normal'],
-  DEFAULT_ZOOM: 1,
+  ZOOM_LABELS: ['Close', 'Wide'],
+  DEFAULT_ZOOM: 0,
   WIDE_ZOOM_INDEX: 2,       // from this zoom step, keep 5x5 tiles loaded instead of 3x3
 
   // Heading = the direction the bike has just moved (the track), refined to

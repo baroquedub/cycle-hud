@@ -16,7 +16,8 @@
   --warn: #ffb547;
   --danger: #ff6b6b;
   --ok: #4cd97b;
-  --dash-dim: 0.45;      /* brightness of the speed / media / clock row in the Glance View */
+  --dash-dim: 0.45;      /* brightness of the speed / media / clock row in the Glance View (Glance View: Dimmed) */
+  --ride-val: #D8DBE0;   /* ride time digits: brighter than --dim, not as bright as the clock */
   --radius: 16px;
 }
 
@@ -104,9 +105,10 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   display: flex; flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px;
   pointer-events: none;
 }
-.ride-row { display: flex; gap: 8px; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.ride-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.3; }
 .ride-label { text-transform: uppercase; letter-spacing: 0.06em; }
-.clock-ride { display: none; font-size: 13px; font-weight: 400; color: var(--dim); font-variant-numeric: tabular-nums; line-height: 1.3; }
+.ride-row .ride-val { font-size: 20px; font-weight: 600; color: var(--ride-val); }
+.clock-ride { display: none; font-size: 18px; font-weight: 600; color: var(--ride-val); font-variant-numeric: tabular-nums; line-height: 1.2; }
 .ride-val.paused { animation: ridepulse 1.6s ease-in-out infinite; }   /* stopped mid-ride: the count waits, pulsing */
 @keyframes ridepulse {
   0%, 100% { opacity: 1; }
@@ -132,11 +134,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 .pill[hidden] { display: none; }
 
-/* media bar */
+/* media bar: one node, moved by app.js between the map screen (absolute, flush
+   under the 400 px map) and the pause screen (in flow) */
 .media-bar {
-  position: absolute; z-index: 2;
-  left: 8px; right: 8px; top: 408px;   /* flush under the 400 px map */
-  height: 88px;
+  position: relative; z-index: 2;
+  width: 100%; height: 88px;
   background: var(--surface);
   border-radius: var(--radius);
   display: flex; align-items: center; gap: 16px;
@@ -146,6 +148,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: opacity 300ms cubic-bezier(0.4, 0.04, 0.5, 1);
 }
 .media-bar[hidden] { display: none; }
+.map-screen .media-bar { position: absolute; width: auto; left: 8px; right: 8px; top: 408px; }
 /* track progress: a thin line along the bottom edge, the bar's full width = the whole track */
 .media-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--line); }
 .media-prog[hidden] { display: none; }
@@ -157,6 +160,16 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   border-radius: 50%; background: var(--surface-2);
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; font-weight: 700;
+}
+/* the glyph is the play state, never a button: bouncing bars while playing,
+   pause bars for a paused track, a note when nothing is on */
+.media-glyph .eq { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.media-glyph .eq i { display: block; width: 4px; height: 8px; border-radius: 1px; background: currentColor; animation: eq 1s ease-in-out infinite; }
+.media-glyph .eq i:nth-child(2) { animation-delay: -0.35s; }
+.media-glyph .eq i:nth-child(3) { animation-delay: -0.7s; }
+@keyframes eq {
+  0%, 100% { height: 6px; }
+  50% { height: 18px; }
 }
 .media-text { flex: 1 1 auto; min-width: 0; }
 .mq-box { overflow: hidden; white-space: nowrap; }
@@ -180,6 +193,7 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .map-screen.dash .clock-ride { display: block; margin-top: 2px; }   /* ride time under the time, like mph under the speed */
 .map-screen.dash .ride { display: none; }
 .map-screen.dash .pill.speed, .map-screen.dash .pill.clock, .map-screen.dash .media-bar { opacity: var(--dash-dim); }
+.map-screen.dash.bright .pill.speed, .map-screen.dash.bright .pill.clock, .map-screen.dash.bright .media-bar { opacity: 1; }   /* Glance View: Bright */
 
 /* ---------- menu ---------- */
 .rows { display: flex; flex-direction: column; gap: 8px; width: 100%; }
@@ -195,12 +209,27 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   transition: transform 475ms cubic-bezier(0.6, 0, 0.4, 1), opacity 300ms cubic-bezier(0.4, 0.04, 0.5, 1);
 }
 .row[hidden] { display: none; }
-/* menu transport row: ‹ | Play/Pause | › */
+.row.center { text-align: center; }
+/* two settings side by side */
+.row2 { display: flex; gap: 8px; width: 100%; }
+.row2 .row { flex: 1 1 0; width: auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* menu player row: previous | now playing (press = play/pause) | next */
 .transport { display: flex; gap: 8px; width: 100%; }
 .transport[hidden] { display: none; }
 .transport .row { width: auto; text-align: center; }
-.transport .tbtn { flex: 0 0 104px; padding: 0; font-size: 40px; line-height: 1; }
+.transport .tbtn { flex: 0 0 104px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.transport .tbtn svg { width: 32px; height: 32px; fill: currentColor; }
 .transport .tmain { flex: 1 1 auto; }
+.transport .player { position: relative; overflow: hidden; display: flex; align-items: center; gap: 14px; padding: 0 20px; text-align: left; min-width: 0; }
+.pp-glyph { flex: 0 0 36px; height: 36px; border-radius: 50%; background: var(--surface-2); display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; }
+.row:focus-visible .pp-glyph { background: var(--line); }
+.pp-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.pp-title { font-size: 20px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-artist { font-size: 14px; font-weight: 400; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-artist:empty { display: none; }
+.pp-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--line); }
+.pp-prog[hidden] { display: none; }
+.pp-prog-fill { display: block; height: 100%; width: 0; background: var(--dim); }
 .row:focus-visible { opacity: 1; background: var(--surface-2); transform: scale(0.97); outline: 3px solid var(--accent); outline-offset: -3px; }
 
 /* ---------- top bar, buttons ---------- */
@@ -253,3 +282,44 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
   pointer-events: none;
 }
 .toast[hidden] { display: none; }
+
+/* ---------- wordmark (splash, pause, quit) ---------- */
+.wordmark { font-size: 44px; font-weight: 700; line-height: 1; letter-spacing: -0.01em; color: var(--text); white-space: nowrap; }
+.wordmark span { color: var(--warn); }
+
+/* ---------- pause ride ---------- */
+.pause-screen { padding: 16px 16px 8px; gap: 10px; }
+.pause-top { display: flex; align-items: center; justify-content: space-between; height: 56px; }
+.pause-clock { height: 56px; padding: 0 18px; display: flex; align-items: center; background: var(--surface); border-radius: var(--radius); font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pause-label { font-size: 14px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--warn); }
+.stats { display: flex; gap: 8px; width: 100%; }
+.stat { flex: 1 1 0; height: 96px; background: var(--surface); border-radius: var(--radius); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.stat-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--dim); }
+.stat-val { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.stat-unit { font-size: 14px; color: var(--dim); }
+.media-host { width: 100%; }
+.pause-actions, .quit-actions { display: flex; width: 100%; }
+.btn.resume { font-size: 24px; }
+.pause-hint { text-align: center; }
+
+/* ---------- quit? ---------- */
+.quit-screen { align-items: center; justify-content: center; gap: 18px; padding-bottom: 120px; }
+.quit-q { font-size: 32px; font-weight: 700; }
+.quit-hint { text-align: center; max-width: 440px; }
+.quit-actions { max-width: 440px; }
+
+/* ---------- splash ---------- */
+.splash {
+  position: absolute; inset: 0; z-index: 20;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding-bottom: 60px;
+  opacity: 0; transition: opacity 400ms ease-out;
+  pointer-events: none;
+}
+.splash.in { opacity: 1; }
+.splash.out { opacity: 0; transition: opacity 500ms ease-in; }
+.splash-mark { font-size: 76px; }
+.splash-tag { font-size: 22px; letter-spacing: 0.08em; color: var(--text-2); }
+.splash-safe { margin-top: 26px; max-width: 520px; text-align: center; font-size: 30px; font-weight: 600; color: var(--warn); opacity: 0; transition: opacity 600ms ease-out; }
+.splash-safe.show { opacity: 1; }

@@ -23,6 +23,7 @@
     lastPollAt: 0,
     lastTitle: null,
     lastProg: -1,        // fraction last drawn on the progress line (-1 = hidden)
+    lastGlyph: '',       // what the round glyph shows: 'eq' (playing) | 'pause' | 'note'
     onState: null,       // app hook (so the menu's Play/Pause row can follow)
     toast: (msg) => console.log('[media]', msg),
 
@@ -145,7 +146,14 @@
       else if (L.state === 'offline') { a = (a ? a + ' · ' : '') + 'Reconnecting…' + (src && src.lastError ? ' (' + src.lastError + ')' : ''); }
       if (title.textContent !== t) { title.textContent = t; Media.marquee(title, t); }
       artist.textContent = a;
-      glyph.textContent = L.playing ? '❚❚' : '▶';      // play state, not the source
+      // The glyph is the play state, not a button: bouncing bars while playing
+      // (set once so the animation isn't restarted every poll), pause bars for
+      // a track that is paused, a note when nothing is on.
+      const g = L.playing ? 'eq' : L.title ? 'pause' : 'note';
+      if (g !== Media.lastGlyph) {
+        Media.lastGlyph = g;
+        glyph.innerHTML = g === 'eq' ? '<span class="eq"><i></i><i></i><i></i></span>' : g === 'pause' ? '❚❚' : '♪';
+      }
       title.classList.toggle('paused', !L.playing || document.visibilityState === 'hidden');
       bar.classList.toggle('dim', L.state !== 'ok');
     },

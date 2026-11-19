@@ -19,7 +19,7 @@
 
     <!-- ============ MAP (home) ============ -->
     <section id="screen-map" class="screen map-screen" data-screen="map">
-      <button id="map-focus" class="map-focus" aria-label="Map View. Select switches between Map View and Glance View, down opens the menu, left and right skip tracks."></button>
+      <button id="map-focus" class="map-focus" aria-label="Map View. Select switches between Map View and Glance View, up toggles the zoom, down opens the menu, left and right skip tracks."></button>
       <canvas id="map" width="600" height="400" aria-hidden="true"></canvas>
 
       <!-- speed dial: a 270-degree gauge arc from 7:30 clockwise over the top to 4:30
@@ -35,7 +35,7 @@
         <span class="speed-val" id="speed-val">--</span>
         <span class="speed-unit" id="speed-unit">mph</span>
       </div>
-      <div class="pill clock" id="clock"><span id="clock-time">--:--</span><span class="ride-val clock-ride" id="clock-ride">00:00</span></div>
+      <div class="pill clock" id="clock"><span id="clock-time" class="clock-time">--:--</span><span class="ride-val clock-ride" id="clock-ride">00:00</span></div>
       <!-- ride time (moving time only), beside the clock in map view; room for a second row -->
       <div class="ride" id="ride-rows" aria-live="off">
         <div class="ride-row"><span class="ride-label">Ride time</span><span class="ride-val" id="ride-val">00:00</span></div>
@@ -56,19 +56,63 @@
     </section>
 
     <!-- ============ MENU ============ -->
+    <!-- seven 72 px rows: Pause Ride, the player (previous | now playing + play/pause | next),
+         two half-width pairs, then single rows. Pause Ride takes focus on entry. -->
     <section id="screen-menu" class="screen" data-screen="menu" hidden>
       <div class="rows">
+        <button class="row center" data-action="pause" id="row-pause" data-default>Pause Ride</button>
         <div class="transport" id="row-transport">
-          <button class="row tbtn" data-action="prev" aria-label="Previous track">‹</button>
-          <button class="row tmain" data-action="playpause" id="row-playpause" data-default>▶  Play</button>
-          <button class="row tbtn" data-action="next" aria-label="Next track">›</button>
+          <button class="row tbtn" data-action="prev" aria-label="Previous track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h2v14H5zM19 5v14L8 12z"/></svg></button>
+          <button class="row tmain player" data-action="playpause" id="row-playpause" aria-label="Play or pause">
+            <span class="pp-glyph" id="pp-glyph">▶</span>
+            <span class="pp-text"><span class="pp-title" id="pp-title">Play</span><span class="pp-artist" id="pp-artist"></span></span>
+            <span class="pp-prog" id="pp-prog" hidden><span class="pp-prog-fill" id="pp-prog-fill"></span></span>
+          </button>
+          <button class="row tbtn" data-action="next" aria-label="Next track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 5h2v14h-2zM5 5v14l11-7z"/></svg></button>
         </div>
-        <button class="row" data-action="zoom" id="row-zoom">Zoom: Normal</button>
-        <button class="row" data-action="mapmode" id="row-mapmode">Map: Facing up</button>
-        <button class="row" data-action="units" id="row-units">Units: mph</button>
+        <div class="row2">
+          <button class="row" data-action="mapmode" id="row-mapmode">Map: Facing up</button>
+          <button class="row" data-action="zoom" id="row-zoom">Zoom: Close</button>
+        </div>
+        <div class="row2">
+          <button class="row" data-action="units" id="row-units">Units: mph</button>
+          <button class="row" data-action="glance" id="row-glance">Glance View: Dimmed</button>
+        </div>
         <button class="row" data-action="media" id="row-media">Audio: Auto</button>
         <button class="row" data-action="pair">Pair phone</button>
         <button class="row" data-action="status">Status</button>
+      </div>
+    </section>
+
+    <!-- ============ PAUSE RIDE ============ -->
+    <!-- Reached from the menu (replaces it in the history). Select resumes; Back goes
+         to the Quit? screen. The media bar is moved in here from the map screen. -->
+    <section id="screen-pause" class="screen pause-screen" data-screen="pause" hidden>
+      <div class="pause-top">
+        <div class="wordmark">Cycle<span>HUD</span></div>
+        <div class="pause-clock clock-time">--:--</div>
+      </div>
+      <div class="pause-label">Ride paused</div>
+      <div class="stats" aria-live="off">
+        <div class="stat"><span class="stat-label">Ride time</span><span class="stat-val ride-val" id="pause-ride">00:00</span></div>
+        <div class="stat"><span class="stat-label">Avg speed</span><span class="stat-val" id="pause-avg">--</span><span class="stat-unit" id="pause-avg-unit">mph</span></div>
+        <div class="stat"><span class="stat-label">Distance</span><span class="stat-val" id="pause-dist">0.0</span><span class="stat-unit" id="pause-dist-unit">mi</span></div>
+      </div>
+      <div class="media-host" id="pause-media"></div>
+      <div class="pause-actions">
+        <button class="btn resume" data-action="resume" data-default>Resume ride</button>
+      </div>
+      <p class="hint pause-hint">Select resumes · Back quits CycleHUD</p>
+    </section>
+
+    <!-- ============ QUIT? ============ -->
+    <!-- History depth 0: a web app cannot close itself, so the next Back leaves via the glasses. -->
+    <section id="screen-quit" class="screen quit-screen" data-screen="quit" hidden>
+      <div class="wordmark">Cycle<span>HUD</span></div>
+      <h1 class="quit-q">Quit CycleHUD?</h1>
+      <p class="hint quit-hint">Tap Back again to quit. Ride time and distance are not kept.</p>
+      <div class="quit-actions">
+        <button class="btn resume" data-action="resume" data-default>No, resume ride</button>
       </div>
     </section>
 
@@ -107,6 +151,13 @@
     </section>
 
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <!-- splash: wordmark + tagline, then the safety line; app.js removes it (any key skips) -->
+    <div id="splash" class="splash" aria-hidden="true">
+      <div class="wordmark splash-mark">Cycle<span>HUD</span></div>
+      <div class="splash-tag">Your ride. At a glance.</div>
+      <div class="splash-safe" id="splash-safe">Be safe. Keep your eyes on the road.</div>
+    </div>
   </div>
 
   <script src="config.js"></script>

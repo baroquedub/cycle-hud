@@ -379,6 +379,7 @@
     riderXY: [300, 320],   // recomputed from the canvas size on every draw
     stale: false,          // last fix suspect: drawn dim until a new one lands
     stoppedAt: 0,          // when drawing stopped (menu, Glance View, display off)
+    hiddenAt: 0,           // when the page went hidden (display off); set by app.js
     resumeAt: 0,           // when drawing came back after a long absence
 
     init(canvas) { MapView.canvas = canvas; },
@@ -407,12 +408,14 @@
       MapView.timer = setTimeout(() => requestAnimationFrame(MapView.draw), wait);
     },
     stop() { clearTimeout(MapView.timer); MapView.queued = false; if (!MapView.stoppedAt) MapView.stoppedAt = CH.clock(); },
-    // Drawing is back on. Returns true when it had been off long enough that
-    // the last fix may no longer be where we are.
+    // Drawing is back on. Returns true when the page had been hidden (display
+    // off) long enough that the last fix may no longer be where we are. Time
+    // on another screen does not count: fixes keep arriving and MapView.fix
+    // is kept current while the menu, Glance View or the pause screen is up.
     resume() {
-      const away = MapView.stoppedAt && CH.clock() - MapView.stoppedAt > CFG.AWAY_MS;
+      const away = MapView.hiddenAt && CH.clock() - MapView.hiddenAt > CFG.AWAY_MS;
       if (away) MapView.resumeAt = CH.clock();
-      MapView.stoppedAt = 0;
+      MapView.stoppedAt = 0; MapView.hiddenAt = 0;
       MapView.requestDraw();
       return !!away;
     },

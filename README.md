@@ -19,6 +19,10 @@ Runs on **Meta Ray-Ban Display** glasses as a web app: nothing to install on you
 </tr>
 </table>
 
+## Ride safely
+
+CycleHUD is a glanceable display, not a navigator, and it cannot see the road. Keep your eyes on the road and your attention on traffic, pedestrians, surfaces and everything else around you. Glance at the display only when it is safe to, as you would at a bike computer, never while turning or in heavy traffic. Check the law where you ride before cycling with a display. You ride at your own risk: CycleHUD comes with no warranty and its author accepts no responsibility for accidents, injury, loss or damage arising from its use.
+
 ## Add it to your glasses
 
 <table>
@@ -40,25 +44,28 @@ Runs on **Meta Ray-Ban Display** glasses as a web app: nothing to install on you
 
 | Where | Controls |
 |---|---|
-| Map View / Glance View | **Select** switches between Map View and Glance View · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
-| Menu | **‹ Play/Pause ›** · **Zoom** Normal / Close · **Map** Facing up / North up · **Units** mph / km/h · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
+| Map View / Glance View | **Select** switches between Map View and Glance View · **Up** toggles the zoom (Close / Wide) · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
+| Menu | **Pause Ride** · the player: previous, now playing (press for play / pause), next · **Map** Facing up / North up · **Zoom** Close / Wide · **Units** mph / km/h · **Glance View** Dimmed / Bright · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
+| Pause Ride | Ride time, average speed and distance (moving time only) with the player (**Left / Right** skip) · **Select** resumes · **Back** asks before you quit |
 
 <table>
 <tr>
 <td width="33%"><img src="docs/ss-2.jpg" alt="Glance View: speed dial, music bar and clock on one row, no map" width="100%"></td>
-<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: play, previous, next, zoom, map mode, units, audio source, pair phone, status" width="100%"></td>
+<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: Pause Ride, the player with previous and next, map mode, zoom, units, Glance View brightness, audio source, pair phone, status" width="100%"></td>
 <td width="33%"><img src="docs/ss-4.jpg" alt="Pair phone screen showing the pairing address and an 8-character code" width="100%"></td>
 </tr>
 <tr>
 <td align="center">Glance View: speed, music and time, nothing else.</td>
-<td align="center">One menu: play, skip, units, map, zoom.</td>
+<td align="center">One menu: pause the ride, play, skip, map, zoom, units.</td>
 <td align="center">Pair your phone once.</td>
 </tr>
 </table>
 
 - **Facing up** rotates the map so the direction you have just moved points up the screen; **North up** keeps the map still and turns the arrow. The map holds its heading while you wait at a junction and picks the new direction up within a few metres of moving off.
-- Speed and ride time come from the phone's GPS. The speed dims after 5 s without a fix and shows `--` after 15 s.
-- The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge. **Audio: Auto** (the default) shows whichever one is playing; **Audio: None** hides the bar in both views.
+- Speed and ride time come from the phone's GPS. The speed dims after 5 s without a fix and shows `--` after 15 s. Ride time counts moving time only, so waiting at lights does not add to it.
+- **Pause Ride** (top of the menu) freezes the ride time and shows your moving-time figures: ride time, average speed and distance. Select resumes, straight back to whichever view you were in. Figures start from zero each time the app is opened.
+- The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge; the round glyph is the play state (bars bounce while playing). **Audio: Auto** (the default) shows whichever one is playing; **Audio: None** hides the bar in both views.
+- Glance View is dimmed so it sits quietly in your view; **Glance View: Bright** in the menu turns that off.
 
 ## Pair your phone (needed for music)
 
@@ -125,7 +132,7 @@ Serve the folder (for example `python -m http.server 8000` inside it) and open `
 ### Files
 
 ```
-index.html                   glasses screens (map, menu, pair, status) + media bar
+index.html                   glasses screens (map, menu, pause, quit, pair, status) + media bar + splash
 styles.css                   styles for the additive display
 config.js                    non-secret settings (tile source, relay, zoom steps, units, version)
 geo.js                       geo maths, location watch, demo rider + ride replay, compass (launch only), Motion: track → heading

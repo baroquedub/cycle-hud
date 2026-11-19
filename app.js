@@ -4,7 +4,8 @@
  * focus movement, key routing, menu, clock, pills, pairing, status, wake lock.
  *
  * Input: the Neural Band / temple swipes send ArrowUp/Down/Left/Right + Enter.
- * Main screen: Enter Map View / Glance View (dash) · Down menu · Left/Right previous/next track.
+ * Main screen: Enter Map View / Glance View (dash) · Up zoom · Down menu · Left/Right previous/next track.
+ * Menu: Pause Ride opens the pause screen (Enter resumes; Back asks before quitting).
  * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7; degradations in
  * geo.js), or ?replay=URL to play a ride log back.
  */
@@ -30,12 +31,14 @@
     media: store.get('media', 'auto'),                     // 'auto' (whichever is playing) | 'spotify' | 'plex' | 'off' (shown as Audio: None; the bar is hidden)
     zoom: store.get('zoom', CFG.DEFAULT_ZOOM),
     debug: store.get('debug', false),                      // on-map readout (bottom band), toggled on the Status screen
+    glance: store.get('glance', 'dim'),                    // Glance View brightness: 'dim' (--dash-dim) | 'bright'
   };
   if (!['mph', 'kmh'].includes(settings.units)) settings.units = CFG.DEFAULT_UNITS;
   if (!['auto', 'north'].includes(settings.mapMode)) settings.mapMode = 'auto';
   if (!['map', 'dash'].includes(settings.view)) settings.view = 'map';
   if (!['auto', 'spotify', 'plex', 'off'].includes(settings.media)) settings.media = 'auto';
   if (!(settings.zoom >= 0 && settings.zoom < CFG.ZOOMS.length)) settings.zoom = CFG.DEFAULT_ZOOM;
+  if (!['dim', 'bright'].includes(settings.glance)) settings.glance = 'dim';
   CH.settings = settings;
 
   // ------------------------------------------------------------------ toast
@@ -88,18 +91,26 @@
   // Ride time: how long the bike has been moving since the app was opened. It
   // runs while Motion has confirmed movement and the shown speed is above
   // zero (so a stop at a light pauses it the moment the dial reads 0.0, a few
-  // seconds before the heading logic declares the hold). Nothing is persisted:
+  // seconds before the heading logic declares the hold), and not at all while
+  // the ride is paused from the menu. Distance is the speed integrated over
+  // that running time, so the average speed (distance / ride time) is a
+  // moving average that stops at lights do not drag down. Nothing is persisted:
   // a fresh launch starts from 00:00, a sleeping display keeps the count.
   const RideTime = {
     acc: 0, since: null, started: false,
-    running() { return Motion.moving && Motion.speed >= 0.05; },   // 0.05 m/s = the dial's smallest non-zero reading
+    held: false,             // Pause Ride: nothing counts until Resume
+    dist: 0, lastAt: null,   // metres covered while running; when the last slice was added
+    running() { return !RideTime.held && Motion.moving && Motion.speed >= 0.05; },   // 0.05 m/s = the dial's smallest non-zero reading
     update(now) {
       const run = RideTime.running();
       if (run && RideTime.since == null) { RideTime.since = now; RideTime.started = true; }
       else if (!run && RideTime.since != null) { RideTime.acc += now - RideTime.since; RideTime.since = null; }
+      if (run && RideTime.lastAt != null && now > RideTime.lastAt) RideTime.dist += Motion.speed * (now - RideTime.lastAt) / 1000;
+      RideTime.lastAt = run ? now : null;
     },
     ms(now = CH.clock()) { return RideTime.acc + (RideTime.since != null ? now - RideTime.since : 0); },
     paused() { return RideTime.started && !RideTime.running(); },
+    avg() { const s = RideTime.ms() / 1000; return s >= 10 && RideTime.dist > 0 ? RideTime.dist / s : null; },   // m/s; null until 10 s of riding
   };
   CH.RideTime = RideTime;
   function fmtRide(ms) {
@@ -107,11 +118,13 @@
     const mm = (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
     return h ? h + ':' + mm : mm;
   }
+  const fmtDist = (m) => (settings.units === 'mph' ? m / 1609.344 : m / 1000).toFixed(1);
+  const distUnit = () => settings.units === 'mph' ? 'mi' : 'km';
   function renderRide() {
     const now = CH.clock();
     RideTime.update(now);
     const text = fmtRide(RideTime.ms(now)), paused = RideTime.paused();
-    for (const id of ['ride-val', 'clock-ride']) {
+    for (const id of ['ride-val', 'clock-ride', 'pause-ride']) {
       const el = $(id);
       if (el.textContent !== text) el.textContent = text;
       el.classList.toggle('paused', paused);
@@ -126,15 +139,18 @@
 
   // ------------------------------------------------------------------ screens + history
   let current = 'map';
-  const SCREENS = ['map', 'menu', 'pair', 'status'];
+  const SCREENS = ['map', 'menu', 'pair', 'status', 'pause', 'quit'];
+  let resumeIntent = false;   // Enter on the pause screen has called history.back(): the popstate is a resume, not a Back
 
   function render(name) {
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.dataset.screen !== name; });
     const was = current;
     current = name;
+    placeMediaBar(name);
     if (name === 'map') applyView();
     else { MapView.enabled = false; MapView.stop(); }
     if (name === 'menu') renderMenu();
+    if (name === 'pause') renderPause();
     if (name === 'pair') renderPair();
     if (name === 'pair' || was === 'pair') Relay.setFastPoll(name === 'pair');
     if (name === 'status') renderStatus();
@@ -154,8 +170,16 @@
     if (depth > 0) history.back();
   }
 
+  // History: map (0) -> menu (1) -> pair / status (2). Pause Ride replaces the
+  // menu entry, so the pause screen sits at depth 1 over the map. Enter there
+  // goes back to the map; the Back gesture is turned into the Quit? screen at
+  // depth 0, where the next Back leaves the app through the glasses (a web app
+  // cannot close itself) and Resume puts the map back at depth 0.
   window.addEventListener('popstate', (e) => {
     const st = e.state || { s: 'map', d: 0 };
+    const resuming = resumeIntent; resumeIntent = false;
+    if (resuming) { show('map', 'replace'); return; }
+    if (current === 'pause') { show('quit', 'replace'); return; }
     render(SCREENS.includes(st.s) ? st.s : 'map');
   });
 
@@ -230,15 +254,26 @@
 
   // ------------------------------------------------------------------ keys
   document.addEventListener('keydown', (e) => {
+    if (Splash.up) { Splash.dismiss(); e.preventDefault(); e.stopImmediatePropagation(); return; }   // skip the splash, nothing else
     const k = e.key;
     if (current === 'map') {
       if (k === 'ArrowDown') { openMenu(); e.preventDefault(); }
-      else if (k === 'ArrowUp') { e.preventDefault(); }
+      else if (k === 'ArrowUp') { cycleZoom(); e.preventDefault(); }
       else if (k === 'ArrowLeft') { mediaAct('prev'); e.preventDefault(); }
       else if (k === 'ArrowRight') { mediaAct('next'); e.preventDefault(); }
       else if (k === 'Enter') { toggleView(); e.preventDefault(); }
       return;
     }
+    if (current === 'pause') {
+      // Enter resumes whatever has focus (focus wanders on the glasses after a screen change)
+      if (k === 'ArrowLeft') mediaAct('prev');
+      else if (k === 'ArrowRight') mediaAct('next');
+      else if (k === 'Enter') resumeRide();
+      else if (k === 'Escape') goBack();
+      else return;
+      e.preventDefault(); return;
+    }
+    if (current === 'quit' && k === 'Enter') { resumeRide(); e.preventDefault(); return; }
     const dir = { ArrowDown: 'down', ArrowUp: 'up', ArrowLeft: 'left', ArrowRight: 'right' }[k];
     if (dir) { if (FocusNav.move(dir)) { e.preventDefault(); e.stopPropagation(); } return; }
     if (k === 'Enter') {
@@ -262,6 +297,9 @@
     else if (a === 'mapmode') { cycleMapMode(); renderMenu(); }
     else if (a === 'zoom') { cycleZoom(); renderMenu(); }
     else if (a === 'media') { cycleMedia(); renderMenu(); }
+    else if (a === 'glance') { cycleGlance(); renderMenu(); }
+    else if (a === 'pause') pauseRide();
+    else if (a === 'resume') resumeRide();
     else if (a === 'pair') show('pair');
     else if (a === 'status') show('status');
     else if (a === 'newcode') { Relay.start(true); renderPair(); toast('New code — enter it on your phone'); }
@@ -294,11 +332,24 @@
 
   // ------------------------------------------------------------------ main-screen view (map / dash)
   function applyView() {
-    $('screen-map').classList.toggle('dash', settings.view === 'dash');
+    const scr = $('screen-map');
+    scr.classList.toggle('dash', settings.view === 'dash');
+    scr.classList.toggle('bright', settings.glance === 'bright');
     MapView.enabled = current === 'map' && settings.view === 'map';
-    if (MapView.enabled) { if (MapView.resume()) Loc.refresh(); } else MapView.stop();
+    if (MapView.enabled) {
+      // back on show with an old fix (display was off, or the phone went quiet
+      // at a standstill while another screen was up): ask for a fresh one
+      const away = MapView.resume();
+      if (away || !Loc.fresh(CFG.STALE_FIX_MS)) Loc.refresh();
+    } else MapView.stop();
     Media.remeasure(); renderRide();
     updateDebug(); updateGpsPill(); updateMapPill();
+  }
+  function cycleGlance() {
+    settings.glance = settings.glance === 'bright' ? 'dim' : 'bright';
+    store.set('glance', settings.glance);
+    $('screen-map').classList.toggle('bright', settings.glance === 'bright');
+    toast('Glance View: ' + (settings.glance === 'bright' ? 'Bright' : 'Dimmed'), 1500);
   }
   function toggleView() {
     settings.view = settings.view === 'map' ? 'dash' : 'map';
@@ -315,16 +366,89 @@
   function openMenu() { show('menu'); }
 
   function renderMenu() {
-    const hasMedia = settings.media !== 'off';
-    const pp = $('row-playpause');
-    $('row-transport').hidden = !hasMedia;
-    pp.textContent = Media.last.playing ? '❚❚  Pause' : '▶  Play';
+    $('row-transport').hidden = settings.media === 'off';
+    renderMenuPlayer();
     $('row-units').textContent = 'Units: ' + unitLabel();
     $('row-mapmode').textContent = 'Map: ' + mapModeLabel();
     $('row-zoom').textContent = 'Zoom: ' + CFG.ZOOM_LABELS[MapView.zoom];
+    $('row-glance').textContent = 'Glance View: ' + (settings.glance === 'bright' ? 'Bright' : 'Dimmed');
     $('row-media').textContent = 'Audio: ' + ({ auto: 'Auto', spotify: 'Spotify', plex: 'Plex', off: 'None' })[settings.media];
   }
+  // The menu's centre button is a small now-playing card: the action glyph
+  // (press = play / pause), title, artist and a progress line along its bottom.
+  function renderMenuPlayer() {
+    const L = Media.last, src = Media.source;
+    let t = L.title, a = L.artist;
+    if (L.state === 'auth') { t = (src ? src.label : 'Audio') + ' not connected'; a = Media.connectHint(src); }
+    else if (!t) { t = L.state === 'offline' ? 'Reconnecting…' : 'Nothing playing'; a = L.state === 'offline' ? '' : 'Start it on your phone'; }
+    else if (L.state === 'offline') a = (a ? a + ' · ' : '') + 'Reconnecting…';
+    $('pp-glyph').textContent = L.playing ? '❚❚' : '▶';
+    const title = $('pp-title'), artist = $('pp-artist');
+    if (title.textContent !== t) title.textContent = t;
+    if (artist.textContent !== a) artist.textContent = a;
+    const f = Media.progress();
+    $('pp-prog').hidden = f == null;
+    if (f != null) $('pp-prog-fill').style.width = (f * 100).toFixed(2) + '%';
+  }
   Media.onState = () => { if (current === 'menu') renderMenu(); };
+
+  // ------------------------------------------------------------------ pause ride / quit?
+  // One media bar serves the map screen and the pause screen: the node moves
+  // between them (media.js finds it by id wherever it is).
+  function placeMediaBar(name) {
+    const bar = $('media-bar');
+    const host = name === 'pause' ? $('pause-media') : name === 'map' ? $('screen-map') : null;
+    if (!host || bar.parentElement === host) return;
+    host.appendChild(bar);
+    if (name === 'pause') Media.remeasure();
+  }
+  function pauseRide() {
+    RideTime.update(CH.clock());
+    RideTime.held = true;
+    show('pause', 'replace');            // the menu entry (depth 1) becomes the pause screen
+  }
+  function resumeRide() {
+    RideTime.held = false;
+    const depth = (history.state && history.state.d) || 0;
+    if (current === 'quit' || depth === 0) { show('map', 'replace'); return; }
+    if (resumeIntent) return;            // back() already on its way (a second Enter)
+    resumeIntent = true;
+    history.back();
+  }
+  function renderPause() {
+    renderRide();
+    const avg = RideTime.avg();
+    $('pause-avg').textContent = avg == null ? '--' : fmtSpeed(avg);
+    $('pause-avg-unit').textContent = unitLabel();
+    $('pause-dist').textContent = fmtDist(RideTime.dist);
+    $('pause-dist-unit').textContent = distUnit();
+  }
+
+  // ------------------------------------------------------------------ splash
+  // Wordmark and tagline, then the safety line, over the map while it boots.
+  // Any key skips it (and is swallowed). Not shown for ride replays or with
+  // ?nosplash (harness runs that press keys straight away).
+  const Splash = {
+    up: false, timers: [],
+    start() {
+      const el = $('splash');
+      if (!el) return;
+      if (CH.REPLAY || /[?&]nosplash\b/.test(location.search)) { el.remove(); return; }
+      Splash.up = true;
+      const at = (ms, fn) => Splash.timers.push(setTimeout(fn, ms));
+      requestAnimationFrame(() => el.classList.add('in'));
+      at(1000, () => $('splash-safe').classList.add('show'));
+      at(4000, Splash.dismiss);
+    },
+    dismiss() {
+      if (!Splash.up) return;
+      Splash.up = false;
+      Splash.timers.forEach(clearTimeout);
+      const el = $('splash');
+      el.classList.add('out');
+      setTimeout(() => el.remove(), 550);
+    },
+  };
 
   const mapModeLabel = () => ({ auto: 'Facing up', north: 'North up' })[settings.mapMode];
 
@@ -354,8 +478,8 @@
 
   // ------------------------------------------------------------------ clock + pills
   function tickClock() {
-    const now = new Date();
-    $('clock-time').textContent = fmtClock(now);
+    const now = new Date(), t = fmtClock(now);
+    document.querySelectorAll('.clock-time').forEach((el) => { if (el.textContent !== t) el.textContent = t; });
     setTimeout(tickClock, 60000 - (now.getSeconds() * 1000 + now.getMilliseconds()) + 50);
   }
 
@@ -418,11 +542,13 @@
   setInterval(() => {
     if (document.visibilityState === 'hidden') return;
     Motion.tick(CH.clock());                       // compass-at-rest rules keep running if the phone goes quiet
-    if (current !== 'map') return;
-    updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); renderRide();
+    if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); renderRide(); }
+    else if (current === 'pause') renderPause();
+    else if (current === 'menu') renderMenuPlayer();
+    else return;
     Media.renderProgress();                        // the track progress line creeps between polls
     // no fixes means no draws: start the stale (dimmed, pulsing) rendering ourselves
-    if (MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
+    if (current === 'map' && MapView.enabled && !MapView.stale && MapView.isStale(CH.clock())) MapView.requestDraw();
   }, 1000);
 
   // ------------------------------------------------------------------ location → everything
@@ -433,6 +559,7 @@
     MapView.setFix(fix);
     RideTime.update(CH.clock());                   // catch the moving / stopped edge on the fix itself
     if (current === 'map') { updateSpeedPill(); updateGpsPill(); updateMapPill(); updateDebug(); renderRide(); }
+    else if (current === 'pause') renderPause();
   }
   MapData.onChange = () => { updateMapPill(); MapView.requestDraw(); if (current === 'status') renderStatus(); };
   Motion.onChange = () => { if (MapView.enabled) MapView.requestDraw(); if (current === 'map') updateDebug(); };
@@ -501,7 +628,7 @@
       ['Last fix', f ? ago(f.t) + (f.ts ? ' (position ' + ago(f.ts) + ')' : '') + ' · ±' + Math.round(f.accuracy) + ' m' : 'none'],
       ['Fixes / restarts', Loc.fixes + ' / ' + Loc.restarts],
       ['Speed', fmtSpeed(Motion.speed) + ' ' + unitLabel() + (Motion.speedStale(5000) ? ' (stale)' : '')],
-      ['Ride time', fmtRide(RideTime.ms()) + (RideTime.paused() ? ' · paused' : RideTime.running() ? ' · moving' : ' · not started')],
+      ['Ride time', fmtRide(RideTime.ms()) + ' · ' + fmtDist(RideTime.dist) + ' ' + distUnit() + (RideTime.avg() != null ? ' · avg ' + fmtSpeed(RideTime.avg()) + ' ' + unitLabel() : '') + (RideTime.held ? ' · ride paused' : RideTime.paused() ? ' · paused' : RideTime.running() ? ' · moving' : ' · not started')],
       ['Heading', (Motion.course == null ? '–' : Math.round(Motion.course) + '°') + ' · from ' + Motion.courseSrc + (Motion.road ? ' (' + Math.round(Motion.road.dist) + ' m away)' : '') + ' · ' + (Motion.moving ? 'moving' : 'held')],
       ['Track', (Motion.raw == null ? '–' : Math.round(Motion.raw) + '° over ' + Math.round(Motion.base) + ' m') + ' · jitter ' + Motion.jitter.toFixed(1) + ' m'],
       ['Compass', Motion.calText() + ' · orients the map at launch and on a sustained turn while stopped'],
@@ -535,7 +662,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') { keepAwake(); if (MapView.enabled) MapView.resume(); }   // geo.js restarts the location watch itself
-    else { MapView.stop(); Motion.saveLog(); Motion.saveCal(); }
+    else { MapView.stop(); MapView.hiddenAt = CH.clock(); Motion.saveLog(); Motion.saveCal(); }   // hiddenAt: the stale-map rule on resume
   });
 
   // ------------------------------------------------------------------ boot
@@ -556,6 +683,7 @@
     applyUnits();
     history.replaceState({ s: 'map', d: 0 }, '', location.pathname + location.search + '#map');
     render('map');
+    Splash.start();
     tickClock();
     Relay.start();
     Media.setSource(settings.media);
