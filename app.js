@@ -5,7 +5,7 @@
  *
  * Input: the Neural Band / temple swipes send ArrowUp/Down/Left/Right + Enter.
  * Main screen: Enter Map View / Glance View (dash) · Up zoom · Down menu · Left/Right previous/next track.
- * Menu: Pause Ride opens the pause screen (Enter resumes; Back asks before quitting).
+ * Menu: Pause / Stop Ride opens the pause screen (Enter resumes; Back asks before quitting).
  * Add ?demo to ride a loop indoors (&start=LAT,LON &speed=7; degradations in
  * geo.js), or ?replay=URL to play a ride log back.
  */
@@ -98,7 +98,7 @@
   // a fresh launch starts from 00:00, a sleeping display keeps the count.
   const RideTime = {
     acc: 0, since: null, started: false,
-    held: false,             // Pause Ride: nothing counts until Resume
+    held: false,             // Pause / Stop Ride: nothing counts until Resume
     dist: 0, lastAt: null,   // metres covered while running; when the last slice was added
     running() { return !RideTime.held && Motion.moving && Motion.speed >= 0.05; },   // 0.05 m/s = the dial's smallest non-zero reading
     update(now) {
@@ -170,7 +170,7 @@
     if (depth > 0) history.back();
   }
 
-  // History: map (0) -> menu (1) -> pair / status (2). Pause Ride replaces the
+  // History: map (0) -> menu (1) -> pair / status (2). Pause / Stop Ride replaces the
   // menu entry, so the pause screen sits at depth 1 over the map. Enter there
   // goes back to the map; the Back gesture is turned into the Quit? screen at
   // depth 0, where the next Back leaves the app through the glasses (a web app

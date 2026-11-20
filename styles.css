@@ -96,12 +96,12 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .pill.clock { top: 24px; right: 24px; font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ride time: moving time only (app.js RideTime). Map view: a small right-aligned
-   block beside the clock (x 459 is 12 px left of the clock pill); each .ride-row
+   block beside the clock (right edge at x 440, 31 px clear of the clock pill); each .ride-row
    is label + value so a second row (time to destination) can join later.
    Glance View: the value alone sits under the time inside the clock pill. */
 .ride {
   position: absolute; z-index: 2;
-  top: 24px; height: 64px; right: 141px;
+  top: 24px; height: 64px; right: 160px;
   display: flex; flex-direction: column; justify-content: center; align-items: flex-end; gap: 2px;
   pointer-events: none;
 }

@@ -45,13 +45,13 @@ CycleHUD is a glanceable display, not a navigator, and it cannot see the road. K
 | Where | Controls |
 |---|---|
 | Map View / Glance View | **Select** switches between Map View and Glance View · **Up** toggles the zoom (Close / Wide) · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
-| Menu | **Pause Ride** · the player: previous, now playing (press for play / pause), next · **Map** Facing up / North up · **Zoom** Close / Wide · **Units** mph / km/h · **Glance View** Dimmed / Bright · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
-| Pause Ride | Ride time, average speed and distance (moving time only) with the player (**Left / Right** skip) · **Select** resumes · **Back** asks before you quit |
+| Menu | **Pause / Stop Ride** · the player: previous, now playing (press for play / pause), next · **Map** Facing up / North up · **Zoom** Close / Wide · **Units** mph / km/h · **Glance View** Dimmed / Bright · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
+| Pause / Stop Ride | Ride time, average speed and distance (moving time only) with the player (**Left / Right** skip) · **Select** resumes · **Back** asks before you quit |
 
 <table>
 <tr>
 <td width="33%"><img src="docs/ss-2.jpg" alt="Glance View: speed dial, music bar and clock on one row, no map" width="100%"></td>
-<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: Pause Ride, the player with previous and next, map mode, zoom, units, Glance View brightness, audio source, pair phone, status" width="100%"></td>
+<td width="33%"><img src="docs/ss-3.jpg" alt="The menu: Pause / Stop Ride, the player with previous and next, map mode, zoom, units, Glance View brightness, audio source, pair phone, status" width="100%"></td>
 <td width="33%"><img src="docs/ss-4.jpg" alt="Pair phone screen showing the pairing address and an 8-character code" width="100%"></td>
 </tr>
 <tr>
@@ -63,7 +63,7 @@ CycleHUD is a glanceable display, not a navigator, and it cannot see the road. K
 
 - **Facing up** rotates the map so the direction you have just moved points up the screen; **North up** keeps the map still and turns the arrow. The map holds its heading while you wait at a junction and picks the new direction up within a few metres of moving off.
 - Speed and ride time come from the phone's GPS. The speed dims after 5 s without a fix and shows `--` after 15 s. Ride time counts moving time only, so waiting at lights does not add to it.
-- **Pause Ride** (top of the menu) freezes the ride time and shows your moving-time figures: ride time, average speed and distance. Select resumes, straight back to whichever view you were in. Figures start from zero each time the app is opened.
+- **Pause / Stop Ride** (top of the menu) freezes the ride time and shows your moving-time figures: ride time, average speed and distance. Select resumes, straight back to whichever view you were in. Figures start from zero each time the app is opened.
 - The music bar shows what is playing on Spotify (any device) or Plexamp, with a progress line along its bottom edge; the round glyph is the play state (bars bounce while playing). **Audio: Auto** (the default) shows whichever one is playing; **Audio: None** hides the bar in both views.
 - Glance View is dimmed so it sits quietly in your view; **Glance View: Bright** in the menu turns that off.
 
