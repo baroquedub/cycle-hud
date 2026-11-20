@@ -44,9 +44,9 @@ CycleHUD is a glanceable display, not a navigator, and it cannot see the road. K
 
 | Where | Controls |
 |---|---|
-| Map View / Glance View | **Select** switches between Map View and Glance View · **Up** toggles the zoom (Close / Wide) · **Down** opens the menu · **Left / Right** previous / next track · **Back** leaves the app |
-| Menu | **Pause / Stop Ride** · the player: previous, now playing (press for play / pause), next · **Map** Facing up / North up · **Zoom** Close / Wide · **Units** mph / km/h · **Glance View** Dimmed / Bright · **Audio** Auto / Spotify / Plex / None · **Pair phone** · **Status** |
-| Pause / Stop Ride | Ride time, average speed and distance (moving time only) with the player (**Left / Right** skip) · **Select** resumes · **Back** asks before you quit |
+| Map View / Glance View | **Select** switches between Map View and Glance View<br>**Up** toggles the zoom (Close / Wide)<br>**Down** opens the menu<br>**Left / Right** previous / next track<br>**Back** leaves the app |
+| Menu | **Pause / Stop Ride** (ride stats, pause and exit)<br>**Map** Facing up / North up<br>**Zoom** Close / Wide<br>**Units** mph / km/h<br>**Glance View** Dimmed / Bright<br>**Audio** Auto / Spotify / Plex / None (hides the media player)<br>**Pair phone**<br>**Status** (debug statistics and logs) |
+| Pause / Stop Ride | Ride time, average speed and distance (moving time only)<br>Media player (**Left / Right** skip)<br>**Select** resumes · **Back** asks before you quit |
 
 <table>
 <tr>
